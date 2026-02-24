@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel: Shameless Cash Grab</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hud">
+    <h1>Pixel: Shameless Cash Grab</h1>
+    <div class="hud-right">
+      <button id="shop-toggle" class="shop-toggle hidden" type="button" aria-live="polite"></button>
+      <div class="currency" aria-live="polite">Cash: <span id="cash">0</span></div>
+    </div>
+  </header>
+
+  <main class="game-wrap">
+    <section id="game-screen" class="canvas" aria-label="Game canvas">
+      <button id="pixel" class="pixel" type="button" aria-label="Click the pixel for cash"></button>
+    </section>
+    <section id="shop-screen" class="shop-screen hidden" aria-label="Shop screen">
+      <div class="shop-head">
+        <h2>Shop</h2>
+        <button id="shop-close" class="shop-close" type="button">Back To Pixel</button>
+      </div>
+      <div id="shop-items" class="shop-items" role="list" aria-label="Shop item list"></div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
