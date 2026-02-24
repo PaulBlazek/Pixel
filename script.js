@@ -1,5 +1,6 @@
 const cashEl = document.getElementById("cash");
 const pixelBtn = document.getElementById("pixel");
+const speedWarningEl = document.getElementById("speed-warning");
 const shopToggleBtn = document.getElementById("shop-toggle");
 const gameScreenEl = document.getElementById("game-screen");
 const shopScreenEl = document.getElementById("shop-screen");
@@ -16,12 +17,19 @@ const profileSelectEl = document.getElementById("profile-select");
 const profileCreateBtn = document.getElementById("profile-create");
 
 const SAVE_KEY = "pixel-save-v1";
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 
 const SHOP_FEATURE_COST = 20;
+const BASE_SPEED_LIMIT = 5;
+const SPEED_WARNING_STICK_MS = 3200;
 const PROFILE_SWITCH_ITEM_ID = "profile-switch";
 const MENU_UNLOCK_ITEM_ID = "menu-system";
+const SPEED_LIMIT_1_ITEM_ID = "speed-limit-1";
+const SPEED_LIMIT_2_ITEM_ID = "speed-limit-2";
+const SPEED_LIMIT_REMOVE_ITEM_ID = "speed-limit-remove";
 const GLOBAL_UNLOCK_ITEMS = new Set([MENU_UNLOCK_ITEM_ID, PROFILE_SWITCH_ITEM_ID]);
+const SPEED_UPGRADE_ITEMS = new Set([SPEED_LIMIT_1_ITEM_ID, SPEED_LIMIT_2_ITEM_ID, SPEED_LIMIT_REMOVE_ITEM_ID]);
+
 const SHOP_ITEMS = [
   {
     id: "shop-choices",
@@ -38,7 +46,8 @@ const SHOP_ITEMS = [
       "dummy-7",
       "dummy-8",
       "dummy-9",
-      "dummy-10"
+      "dummy-10",
+      SPEED_LIMIT_1_ITEM_ID
     ]
   },
   {
@@ -55,6 +64,29 @@ const SHOP_ITEMS = [
     description: "Unlock profile naming, swapping, and creating fresh profiles.",
     cost: 50,
     requires: ["menu-system"]
+  },
+  {
+    id: SPEED_LIMIT_1_ITEM_ID,
+    name: "Fast Fingers",
+    description: "Raise click speed limit from 5/s to 10/s.",
+    cost: 150,
+    requires: ["shop-choices"],
+    unlocks: [SPEED_LIMIT_2_ITEM_ID]
+  },
+  {
+    id: SPEED_LIMIT_2_ITEM_ID,
+    name: "Flaming Fingers",
+    description: "Raise click speed limit from 10/s to 20/s.",
+    cost: 500,
+    requires: [SPEED_LIMIT_1_ITEM_ID],
+    unlocks: [SPEED_LIMIT_REMOVE_ITEM_ID]
+  },
+  {
+    id: SPEED_LIMIT_REMOVE_ITEM_ID,
+    name: "Remove Speed Limit",
+    description: "Remove click throttling completely.",
+    cost: 1000,
+    requires: [SPEED_LIMIT_2_ITEM_ID]
   },
   { id: "dummy-2", name: "Color Tax", description: "Premium hues sold separately, naturally.", cost: 30, requires: ["shop-choices"] },
   { id: "dummy-3", name: "Prestige Smudge", description: "A decorative blur that screams elite value.", cost: 40, requires: ["shop-choices"] },
@@ -78,14 +110,21 @@ const state = {
       name: "Profile 1",
       cash: 0,
       shopFeatureUnlocked: false,
-      purchasedItems: []
+      purchasedItems: [],
+      speedLimitDiscovered: false
     }
   },
   inShopView: false,
   isMenuOpen: false
 };
 
+const runtime = {
+  grantedClickTimestampsByProfile: {},
+  speedWarningByProfile: {}
+};
+
 let saveTimer = null;
+let speedWarningRefreshTimer = null;
 
 function getProfile(profileId = state.activeProfileId) {
   return state.profiles[profileId];
@@ -111,8 +150,104 @@ function isUnlocked(profile, item) {
   return item.requires.every((requiredId) => owned.has(requiredId) || hasGlobalUnlock(requiredId));
 }
 
+function getCurrentSpeedLimit(profile) {
+  if (hasItem(profile, SPEED_LIMIT_REMOVE_ITEM_ID)) {
+    return Infinity;
+  }
+  if (hasItem(profile, SPEED_LIMIT_2_ITEM_ID)) {
+    return 20;
+  }
+  if (hasItem(profile, SPEED_LIMIT_1_ITEM_ID)) {
+    return 10;
+  }
+  return BASE_SPEED_LIMIT;
+}
+
+function shouldShowItem(profile, item, owned) {
+  if (owned.has(item.id)) {
+    return false;
+  }
+  if (GLOBAL_UNLOCK_ITEMS.has(item.id) && hasGlobalUnlock(item.id)) {
+    return false;
+  }
+  if (SPEED_UPGRADE_ITEMS.has(item.id) && !profile.speedLimitDiscovered) {
+    return false;
+  }
+  return isUnlocked(profile, item);
+}
+
 function canSeeShopButton(profile) {
   return profile.shopFeatureUnlocked || profile.cash >= SHOP_FEATURE_COST;
+}
+
+function getGrantedClickWindow(profileId = state.activeProfileId) {
+  if (!runtime.grantedClickTimestampsByProfile[profileId]) {
+    runtime.grantedClickTimestampsByProfile[profileId] = [];
+  }
+  return runtime.grantedClickTimestampsByProfile[profileId];
+}
+
+function pruneClickWindow(windowTimestamps, now) {
+  const oldestAllowed = now - 1000;
+  while (windowTimestamps.length > 0 && windowTimestamps[0] <= oldestAllowed) {
+    windowTimestamps.shift();
+  }
+}
+
+function clearSpeedWarningRefreshTimer() {
+  if (speedWarningRefreshTimer !== null) {
+    clearTimeout(speedWarningRefreshTimer);
+    speedWarningRefreshTimer = null;
+  }
+}
+
+function scheduleSpeedWarningRefresh() {
+  clearSpeedWarningRefreshTimer();
+  const warning = runtime.speedWarningByProfile[state.activeProfileId];
+  if (!warning) {
+    return;
+  }
+
+  const msUntilFade = Math.max(0, warning.visibleUntil - Date.now());
+  speedWarningRefreshTimer = setTimeout(() => {
+    speedWarningRefreshTimer = null;
+    render();
+  }, msUntilFade + 20);
+}
+
+function setSpeedWarning(profileId, text) {
+  runtime.speedWarningByProfile[profileId] = {
+    text,
+    visibleUntil: Date.now() + SPEED_WARNING_STICK_MS
+  };
+  if (profileId === state.activeProfileId) {
+    scheduleSpeedWarningRefresh();
+  }
+}
+
+function clearSpeedWarning(profileId) {
+  delete runtime.speedWarningByProfile[profileId];
+}
+
+function renderSpeedWarning(profile) {
+  const profileId = state.activeProfileId;
+  if (!Number.isFinite(getCurrentSpeedLimit(profile))) {
+    clearSpeedWarning(profileId);
+  }
+
+  const warning = runtime.speedWarningByProfile[profileId];
+  if (!warning) {
+    speedWarningEl.classList.remove("is-visible");
+    return;
+  }
+
+  speedWarningEl.textContent = warning.text;
+  if (Date.now() <= warning.visibleUntil) {
+    speedWarningEl.classList.add("is-visible");
+    scheduleSpeedWarningRefresh();
+  } else {
+    speedWarningEl.classList.remove("is-visible");
+  }
 }
 
 function updateShopVisibility() {
@@ -134,12 +269,7 @@ function renderShopItems(profile) {
   }
 
   const owned = getOwnedSet(profile);
-  const visibleItems = SHOP_ITEMS.filter((item) => {
-    if (GLOBAL_UNLOCK_ITEMS.has(item.id) && hasGlobalUnlock(item.id)) {
-      return false;
-    }
-    return !owned.has(item.id) && isUnlocked(profile, item);
-  });
+  const visibleItems = SHOP_ITEMS.filter((item) => shouldShowItem(profile, item, owned));
   shopItemsEl.innerHTML = visibleItems
     .map((item) => {
       const affordable = profile.cash >= item.cost;
@@ -197,6 +327,7 @@ function render() {
   updateMenuVisibility();
   renderShopItems(profile);
   renderProfileControls(profile);
+  renderSpeedWarning(profile);
 }
 
 function buildSaveState() {
@@ -210,7 +341,8 @@ function buildSaveState() {
       name: profile.name,
       cash: profile.cash,
       shopFeatureUnlocked: profile.shopFeatureUnlocked,
-      purchasedItems: profile.purchasedItems
+      purchasedItems: profile.purchasedItems,
+      speedLimitDiscovered: profile.speedLimitDiscovered
     };
   });
 
@@ -246,7 +378,8 @@ function createFreshProfile(name) {
     name,
     cash: 0,
     shopFeatureUnlocked: false,
-    purchasedItems: []
+    purchasedItems: [],
+    speedLimitDiscovered: false
   };
 }
 
@@ -273,7 +406,8 @@ function sanitizeProfile(rawProfile, fallbackName) {
     name: safeName,
     cash: safeCash,
     shopFeatureUnlocked: Boolean(rawProfile?.shopFeatureUnlocked),
-    purchasedItems: sanitizePurchasedItems(rawProfile?.purchasedItems)
+    purchasedItems: sanitizePurchasedItems(rawProfile?.purchasedItems),
+    speedLimitDiscovered: Boolean(rawProfile?.speedLimitDiscovered)
   };
 }
 
@@ -327,6 +461,7 @@ function loadFromLegacy(parsedState) {
     profile.shopFeatureUnlocked = parsedState.shopFeatureUnlocked;
   }
   profile.purchasedItems = sanitizePurchasedItems(parsedState?.purchasedItems);
+  profile.speedLimitDiscovered = Boolean(parsedState?.speedLimitDiscovered);
 
   state.profiles = { "profile-1": profile };
   state.profileOrder = ["profile-1"];
@@ -346,8 +481,8 @@ function loadGame() {
       return;
     }
 
-    const loadedV3 = loadFromV3(parsed.state);
-    if (!loadedV3) {
+    const loadedProfiles = loadFromV3(parsed.state);
+    if (!loadedProfiles) {
       loadFromLegacy(parsed.state);
     }
   } catch (_error) {
@@ -389,14 +524,38 @@ function reset_game() {
   state.profiles = { "profile-1": createFreshProfile("Profile 1") };
   state.inShopView = false;
   state.isMenuOpen = false;
+  runtime.grantedClickTimestampsByProfile = {};
+  runtime.speedWarningByProfile = {};
+  clearSpeedWarningRefreshTimer();
   render();
 }
 
 pixelBtn.addEventListener("click", () => {
   const profile = getProfile();
-  profile.cash += 1;
+  const profileId = state.activeProfileId;
+  const now = Date.now();
+  const speedLimit = getCurrentSpeedLimit(profile);
+  const grantedClickWindow = getGrantedClickWindow(profileId);
+  pruneClickWindow(grantedClickWindow, now);
+
+  let changedSaveData = false;
+
+  if (!Number.isFinite(speedLimit) || grantedClickWindow.length < speedLimit) {
+    profile.cash += 1;
+    grantedClickWindow.push(now);
+    changedSaveData = true;
+  } else {
+    if (!profile.speedLimitDiscovered) {
+      profile.speedLimitDiscovered = true;
+      changedSaveData = true;
+    }
+    setSpeedWarning(profileId, `Clicks are currently limited to ${speedLimit}/sec. Upgrade in the shop.`);
+  }
+
   render();
-  queueSave();
+  if (changedSaveData) {
+    queueSave();
+  }
 });
 
 shopToggleBtn.addEventListener("click", () => {
@@ -439,7 +598,10 @@ shopItemsEl.addEventListener("click", (event) => {
   if (!item || !profile.shopFeatureUnlocked) {
     return;
   }
-  if (hasItem(profile, item.id) || !isUnlocked(profile, item) || profile.cash < item.cost) {
+  if (profile.cash < item.cost) {
+    return;
+  }
+  if (!shouldShowItem(profile, item, getOwnedSet(profile))) {
     return;
   }
 
