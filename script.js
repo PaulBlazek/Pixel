@@ -5,11 +5,23 @@ const gameScreenEl = document.getElementById("game-screen");
 const shopScreenEl = document.getElementById("shop-screen");
 const shopItemsEl = document.getElementById("shop-items");
 const shopCloseBtn = document.getElementById("shop-close");
+const menuToggleBtn = document.getElementById("menu-toggle");
+const menuPanelEl = document.getElementById("menu-panel");
+const menuCloseBtn = document.getElementById("menu-close");
+const profileControlsEl = document.getElementById("profile-controls");
+const profileLockedEl = document.getElementById("profile-locked");
+const profileNameInput = document.getElementById("profile-name-input");
+const profileNameSaveBtn = document.getElementById("profile-name-save");
+const profileSelectEl = document.getElementById("profile-select");
+const profileCreateBtn = document.getElementById("profile-create");
 
 const SAVE_KEY = "pixel-save-v1";
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 const SHOP_FEATURE_COST = 20;
+const PROFILE_SWITCH_ITEM_ID = "profile-switch";
+const MENU_UNLOCK_ITEM_ID = "menu-system";
+const GLOBAL_UNLOCK_ITEMS = new Set([MENU_UNLOCK_ITEM_ID, PROFILE_SWITCH_ITEM_ID]);
 const SHOP_ITEMS = [
   {
     id: "shop-choices",
@@ -17,7 +29,7 @@ const SHOP_ITEMS = [
     description: "Unlocks a suspiciously large catalog of premium nonsense.",
     cost: 30,
     unlocks: [
-      "dummy-1",
+      "menu-system",
       "dummy-2",
       "dummy-3",
       "dummy-4",
@@ -29,7 +41,21 @@ const SHOP_ITEMS = [
       "dummy-10"
     ]
   },
-  { id: "dummy-1", name: "Tiny Billboard", description: "A very small ad space with very large promises.", cost: 25, requires: ["shop-choices"] },
+  {
+    id: "menu-system",
+    name: "Menu",
+    description: "Unlocks the main menu button in the top-left of the game screen.",
+    cost: 25,
+    requires: ["shop-choices"],
+    unlocks: ["profile-switch"]
+  },
+  {
+    id: "profile-switch",
+    name: "Profile Switch",
+    description: "Unlock profile naming, swapping, and creating fresh profiles.",
+    cost: 50,
+    requires: ["menu-system"]
+  },
   { id: "dummy-2", name: "Color Tax", description: "Premium hues sold separately, naturally.", cost: 30, requires: ["shop-choices"] },
   { id: "dummy-3", name: "Prestige Smudge", description: "A decorative blur that screams elite value.", cost: 40, requires: ["shop-choices"] },
   { id: "dummy-4", name: "Loot Pixel", description: "Every click feels rarer if the label says loot.", cost: 55, requires: ["shop-choices"] },
@@ -44,61 +70,87 @@ const SHOP_ITEMS = [
 const itemById = new Map(SHOP_ITEMS.map((item) => [item.id, item]));
 
 const state = {
-  cash: 0,
-  shopFeatureUnlocked: false,
-  purchasedItems: [],
-  inShopView: false
+  activeProfileId: "profile-1",
+  profileOrder: ["profile-1"],
+  globalUnlocks: [],
+  profiles: {
+    "profile-1": {
+      name: "Profile 1",
+      cash: 0,
+      shopFeatureUnlocked: false,
+      purchasedItems: []
+    }
+  },
+  inShopView: false,
+  isMenuOpen: false
 };
 
 let saveTimer = null;
 
-function getOwnedSet() {
-  return new Set(state.purchasedItems);
+function getProfile(profileId = state.activeProfileId) {
+  return state.profiles[profileId];
 }
 
-function isOwned(itemId) {
-  return getOwnedSet().has(itemId);
+function getOwnedSet(profile) {
+  return new Set(profile.purchasedItems);
 }
 
-function isUnlocked(item) {
+function hasItem(profile, itemId) {
+  return getOwnedSet(profile).has(itemId);
+}
+
+function hasGlobalUnlock(itemId) {
+  return state.globalUnlocks.includes(itemId);
+}
+
+function isUnlocked(profile, item) {
   if (!item.requires || item.requires.length === 0) {
     return true;
   }
-  const owned = getOwnedSet();
-  return item.requires.every((requiredId) => owned.has(requiredId));
+  const owned = getOwnedSet(profile);
+  return item.requires.every((requiredId) => owned.has(requiredId) || hasGlobalUnlock(requiredId));
 }
 
-function canSeeShopButton() {
-  return state.shopFeatureUnlocked || state.cash >= SHOP_FEATURE_COST;
+function canSeeShopButton(profile) {
+  return profile.shopFeatureUnlocked || profile.cash >= SHOP_FEATURE_COST;
 }
 
 function updateShopVisibility() {
-  shopToggleBtn.classList.toggle("hidden", !canSeeShopButton());
+  shopToggleBtn.classList.toggle("hidden", !canSeeShopButton(getProfile()));
   gameScreenEl.classList.toggle("hidden", state.inShopView);
   shopScreenEl.classList.toggle("hidden", !state.inShopView);
 }
 
-function renderShopItems() {
-  const owned = getOwnedSet();
+function updateMenuVisibility() {
+  const menuUnlocked = hasGlobalUnlock(MENU_UNLOCK_ITEM_ID);
+  menuToggleBtn.classList.toggle("hidden", !menuUnlocked);
+  menuPanelEl.classList.toggle("hidden", !menuUnlocked || !state.isMenuOpen || state.inShopView);
+}
 
-  if (!state.shopFeatureUnlocked) {
+function renderShopItems(profile) {
+  if (!profile.shopFeatureUnlocked) {
     shopItemsEl.innerHTML = "";
     return;
   }
 
-  const visibleItems = SHOP_ITEMS.filter((item) => !owned.has(item.id) && isUnlocked(item));
+  const owned = getOwnedSet(profile);
+  const visibleItems = SHOP_ITEMS.filter((item) => {
+    if (GLOBAL_UNLOCK_ITEMS.has(item.id) && hasGlobalUnlock(item.id)) {
+      return false;
+    }
+    return !owned.has(item.id) && isUnlocked(profile, item);
+  });
   shopItemsEl.innerHTML = visibleItems
     .map((item) => {
-      const affordable = state.cash >= item.cost;
+      const affordable = profile.cash >= item.cost;
       const buyDisabled = !affordable;
-      const buttonText = `Buy (${item.cost} cash)`;
       return `
         <article class="shop-item" role="listitem">
           <h3>${item.name}</h3>
           <p class="shop-meta">${item.description || "No description yet."}</p>
           <p class="shop-meta">Cost: ${item.cost.toLocaleString()} cash</p>
           <button class="shop-buy" data-item-id="${item.id}" type="button" ${buyDisabled ? "disabled" : ""}>
-            ${buttonText}
+            Buy (${item.cost} cash)
           </button>
         </article>
       `;
@@ -106,24 +158,75 @@ function renderShopItems() {
     .join("");
 }
 
+function renderProfileControls(profile) {
+  const profileSwitchUnlocked = hasGlobalUnlock(PROFILE_SWITCH_ITEM_ID);
+  profileControlsEl.classList.toggle("hidden", !profileSwitchUnlocked);
+  profileLockedEl.classList.toggle("hidden", profileSwitchUnlocked);
+
+  if (!profileSwitchUnlocked) {
+    return;
+  }
+
+  profileNameInput.value = profile.name;
+  profileSelectEl.innerHTML = state.profileOrder
+    .filter((profileId) => state.profiles[profileId])
+    .map((profileId) => {
+      const listedProfile = state.profiles[profileId];
+      const selected = profileId === state.activeProfileId ? "selected" : "";
+      return `<option value="${profileId}" ${selected}>${listedProfile.name}</option>`;
+    })
+    .join("");
+}
+
 function render() {
-  cashEl.textContent = state.cash.toLocaleString();
-  if (!state.shopFeatureUnlocked) {
+  const profile = getProfile();
+  if (!profile) {
+    return;
+  }
+
+  cashEl.textContent = profile.cash.toLocaleString();
+  if (!profile.shopFeatureUnlocked) {
     shopToggleBtn.classList.add("is-locked");
     shopToggleBtn.textContent = `\uD83D\uDD12 Unlock Shop (${SHOP_FEATURE_COST} cash)`;
   } else {
     shopToggleBtn.classList.remove("is-locked");
     shopToggleBtn.textContent = state.inShopView ? "Close Shop" : "Open Shop";
   }
+
   updateShopVisibility();
-  renderShopItems();
+  updateMenuVisibility();
+  renderShopItems(profile);
+  renderProfileControls(profile);
+}
+
+function buildSaveState() {
+  const serializedProfiles = {};
+  state.profileOrder.forEach((profileId) => {
+    const profile = state.profiles[profileId];
+    if (!profile) {
+      return;
+    }
+    serializedProfiles[profileId] = {
+      name: profile.name,
+      cash: profile.cash,
+      shopFeatureUnlocked: profile.shopFeatureUnlocked,
+      purchasedItems: profile.purchasedItems
+    };
+  });
+
+  return {
+    activeProfileId: state.activeProfileId,
+    profileOrder: state.profileOrder.filter((profileId) => serializedProfiles[profileId]),
+    globalUnlocks: state.globalUnlocks.filter((itemId) => GLOBAL_UNLOCK_ITEMS.has(itemId)),
+    profiles: serializedProfiles
+  };
 }
 
 function saveGame() {
   const payload = {
     version: SAVE_VERSION,
     savedAt: Date.now(),
-    state
+    state: buildSaveState()
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
 }
@@ -138,6 +241,99 @@ function queueSave() {
   }, 150);
 }
 
+function createFreshProfile(name) {
+  return {
+    name,
+    cash: 0,
+    shopFeatureUnlocked: false,
+    purchasedItems: []
+  };
+}
+
+function sanitizePurchasedItems(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set();
+  return value.filter((itemId) => {
+    if (!itemById.has(itemId) || seen.has(itemId)) {
+      return false;
+    }
+    seen.add(itemId);
+    return true;
+  });
+}
+
+function sanitizeProfile(rawProfile, fallbackName) {
+  const safeName = typeof rawProfile?.name === "string" && rawProfile.name.trim()
+    ? rawProfile.name.trim().slice(0, 24)
+    : fallbackName;
+  const safeCash = typeof rawProfile?.cash === "number" && rawProfile.cash >= 0 ? rawProfile.cash : 0;
+  return {
+    name: safeName,
+    cash: safeCash,
+    shopFeatureUnlocked: Boolean(rawProfile?.shopFeatureUnlocked),
+    purchasedItems: sanitizePurchasedItems(rawProfile?.purchasedItems)
+  };
+}
+
+function loadFromV3(parsedState) {
+  const rawProfiles = parsedState?.profiles;
+  if (!rawProfiles || typeof rawProfiles !== "object") {
+    return false;
+  }
+
+  const rawOrder = Array.isArray(parsedState.profileOrder) ? parsedState.profileOrder : [];
+  const orderedIds = rawOrder.filter((profileId) => typeof profileId === "string" && rawProfiles[profileId]);
+  const profileIds = orderedIds.length > 0 ? orderedIds : Object.keys(rawProfiles);
+  if (profileIds.length === 0) {
+    return false;
+  }
+
+  const profiles = {};
+  profileIds.forEach((profileId, index) => {
+    profiles[profileId] = sanitizeProfile(rawProfiles[profileId], `Profile ${index + 1}`);
+  });
+
+  const activeId = typeof parsedState.activeProfileId === "string" && profiles[parsedState.activeProfileId]
+    ? parsedState.activeProfileId
+    : profileIds[0];
+
+  state.profiles = profiles;
+  state.profileOrder = profileIds;
+  state.activeProfileId = activeId;
+  if (Array.isArray(parsedState.globalUnlocks)) {
+    state.globalUnlocks = parsedState.globalUnlocks.filter((itemId) => GLOBAL_UNLOCK_ITEMS.has(itemId));
+  } else {
+    const inferredUnlocks = new Set();
+    profileIds.forEach((profileId) => {
+      profiles[profileId].purchasedItems.forEach((itemId) => {
+        if (GLOBAL_UNLOCK_ITEMS.has(itemId)) {
+          inferredUnlocks.add(itemId);
+        }
+      });
+    });
+    state.globalUnlocks = Array.from(inferredUnlocks);
+  }
+  return true;
+}
+
+function loadFromLegacy(parsedState) {
+  const profile = createFreshProfile("Profile 1");
+  if (typeof parsedState?.cash === "number" && parsedState.cash >= 0) {
+    profile.cash = parsedState.cash;
+  }
+  if (typeof parsedState?.shopFeatureUnlocked === "boolean") {
+    profile.shopFeatureUnlocked = parsedState.shopFeatureUnlocked;
+  }
+  profile.purchasedItems = sanitizePurchasedItems(parsedState?.purchasedItems);
+
+  state.profiles = { "profile-1": profile };
+  state.profileOrder = ["profile-1"];
+  state.activeProfileId = "profile-1";
+  state.globalUnlocks = profile.purchasedItems.filter((itemId) => GLOBAL_UNLOCK_ITEMS.has(itemId));
+}
+
 function loadGame() {
   const raw = localStorage.getItem(SAVE_KEY);
   if (!raw) {
@@ -150,22 +346,33 @@ function loadGame() {
       return;
     }
 
-    if (typeof parsed.state.cash === "number") {
-      state.cash = parsed.state.cash;
-    }
-    if (typeof parsed.state.shopFeatureUnlocked === "boolean") {
-      state.shopFeatureUnlocked = parsed.state.shopFeatureUnlocked;
-    }
-    if (Array.isArray(parsed.state.purchasedItems)) {
-      state.purchasedItems = parsed.state.purchasedItems.filter((itemId) => itemById.has(itemId));
+    const loadedV3 = loadFromV3(parsed.state);
+    if (!loadedV3) {
+      loadFromLegacy(parsed.state);
     }
   } catch (_error) {
     // Ignore invalid save data and keep defaults.
   }
 }
 
+function createNewProfile() {
+  let suffix = state.profileOrder.length + 1;
+  let profileId = `profile-${suffix}`;
+  while (state.profiles[profileId]) {
+    suffix += 1;
+    profileId = `profile-${suffix}`;
+  }
+
+  const profileName = `Profile ${suffix}`;
+  state.profiles[profileId] = createFreshProfile(profileName);
+  state.profileOrder.push(profileId);
+  state.activeProfileId = profileId;
+  state.inShopView = false;
+  state.isMenuOpen = true;
+}
+
 function reset_game() {
-  const confirmation = window.prompt('Type RESET to wipe all save data.', "");
+  const confirmation = window.prompt("Type RESET to wipe all save data.", "");
   if (confirmation !== "RESET") {
     return;
   }
@@ -176,27 +383,30 @@ function reset_game() {
     saveTimer = null;
   }
 
-  state.cash = 0;
-  state.shopFeatureUnlocked = false;
-  state.purchasedItems = [];
+  state.activeProfileId = "profile-1";
+  state.profileOrder = ["profile-1"];
+  state.globalUnlocks = [];
+  state.profiles = { "profile-1": createFreshProfile("Profile 1") };
   state.inShopView = false;
-
+  state.isMenuOpen = false;
   render();
 }
 
 pixelBtn.addEventListener("click", () => {
-  state.cash += 1;
+  const profile = getProfile();
+  profile.cash += 1;
   render();
   queueSave();
 });
 
 shopToggleBtn.addEventListener("click", () => {
-  if (!state.shopFeatureUnlocked) {
-    if (state.cash < SHOP_FEATURE_COST) {
+  const profile = getProfile();
+  if (!profile.shopFeatureUnlocked) {
+    if (profile.cash < SHOP_FEATURE_COST) {
       return;
     }
-    state.cash -= SHOP_FEATURE_COST;
-    state.shopFeatureUnlocked = true;
+    profile.cash -= SHOP_FEATURE_COST;
+    profile.shopFeatureUnlocked = true;
     state.inShopView = false;
     render();
     queueSave();
@@ -204,6 +414,9 @@ shopToggleBtn.addEventListener("click", () => {
   }
 
   state.inShopView = !state.inShopView;
+  if (state.inShopView) {
+    state.isMenuOpen = false;
+  }
   render();
 });
 
@@ -222,15 +435,68 @@ shopItemsEl.addEventListener("click", (event) => {
     return;
   }
   const item = itemById.get(itemId);
-  if (!item || !state.shopFeatureUnlocked) {
+  const profile = getProfile();
+  if (!item || !profile.shopFeatureUnlocked) {
     return;
   }
-  if (isOwned(item.id) || !isUnlocked(item) || state.cash < item.cost) {
+  if (hasItem(profile, item.id) || !isUnlocked(profile, item) || profile.cash < item.cost) {
     return;
   }
 
-  state.cash -= item.cost;
-  state.purchasedItems.push(item.id);
+  profile.cash -= item.cost;
+  profile.purchasedItems.push(item.id);
+  if (GLOBAL_UNLOCK_ITEMS.has(item.id) && !hasGlobalUnlock(item.id)) {
+    state.globalUnlocks.push(item.id);
+  }
+  render();
+  queueSave();
+});
+
+menuToggleBtn.addEventListener("click", () => {
+  if (!hasGlobalUnlock(MENU_UNLOCK_ITEM_ID)) {
+    return;
+  }
+  state.isMenuOpen = !state.isMenuOpen;
+  render();
+});
+
+menuCloseBtn.addEventListener("click", () => {
+  state.isMenuOpen = false;
+  render();
+});
+
+profileNameSaveBtn.addEventListener("click", () => {
+  if (!hasGlobalUnlock(PROFILE_SWITCH_ITEM_ID)) {
+    return;
+  }
+  const profile = getProfile();
+  const nextName = profileNameInput.value.trim().slice(0, 24);
+  if (!nextName) {
+    profileNameInput.value = profile.name;
+    return;
+  }
+  profile.name = nextName;
+  render();
+  queueSave();
+});
+
+profileSelectEl.addEventListener("change", () => {
+  const selectedId = profileSelectEl.value;
+  if (!state.profiles[selectedId]) {
+    return;
+  }
+  state.activeProfileId = selectedId;
+  state.inShopView = false;
+  state.isMenuOpen = false;
+  render();
+  queueSave();
+});
+
+profileCreateBtn.addEventListener("click", () => {
+  if (!hasGlobalUnlock(PROFILE_SWITCH_ITEM_ID)) {
+    return;
+  }
+  createNewProfile();
   render();
   queueSave();
 });

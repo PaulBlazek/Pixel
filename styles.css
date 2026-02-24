@@ -21,7 +21,7 @@ body {
 
 .hud {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   padding: 1rem 1.25rem;
   gap: 0.75rem;
@@ -32,15 +32,12 @@ body {
   font-size: clamp(1.1rem, 2.5vw, 1.5rem);
 }
 
-.hud-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
 .currency {
   font-weight: 700;
   color: var(--accent);
+  padding: 0.25rem 0.45rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
 }
 
 .shop-toggle {
@@ -76,6 +73,17 @@ body {
   background-size: 26px 26px;
   display: grid;
   place-items: center;
+  position: relative;
+}
+
+.canvas-topbar {
+  position: absolute;
+  top: 0.8rem;
+  left: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 4;
 }
 
 .shop-screen {
@@ -159,6 +167,87 @@ body {
 .shop-item.is-owned {
   border-color: rgba(0, 255, 195, 0.55);
   box-shadow: inset 0 0 0 1px rgba(0, 255, 195, 0.4);
+}
+
+.menu-toggle {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.menu-panel {
+  position: absolute;
+  top: 3.2rem;
+  left: 0.8rem;
+  width: min(92vw, 360px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(8, 14, 29, 0.95);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  z-index: 5;
+}
+
+.menu-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.menu-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.menu-close,
+.menu-btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.4rem 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.profile-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.menu-label {
+  font-size: 0.85rem;
+  color: #ccddff;
+}
+
+.menu-row {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.menu-input,
+.menu-select {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.menu-select option {
+  color: #f8fbff;
+  background-color: #122747;
+}
+
+.menu-select option:checked,
+.menu-select option:hover,
+.menu-select option:focus {
+  color: #ffffff;
+  background-color: #1d6f58;
 }
 
 .pixel {

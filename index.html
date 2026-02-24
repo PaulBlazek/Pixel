@@ -9,14 +9,34 @@
 <body>
   <header class="hud">
     <h1>Pixel: Shameless Cash Grab</h1>
-    <div class="hud-right">
-      <button id="shop-toggle" class="shop-toggle hidden" type="button" aria-live="polite"></button>
-      <div class="currency" aria-live="polite">Cash: <span id="cash">0</span></div>
-    </div>
   </header>
 
   <main class="game-wrap">
     <section id="game-screen" class="canvas" aria-label="Game canvas">
+      <div class="canvas-topbar">
+        <button id="menu-toggle" class="menu-toggle hidden" type="button">Menu</button>
+        <button id="shop-toggle" class="shop-toggle hidden" type="button" aria-live="polite"></button>
+        <div class="currency" aria-live="polite">Cash: <span id="cash">0</span></div>
+      </div>
+      <aside id="menu-panel" class="menu-panel hidden" aria-label="Game menu">
+        <div class="menu-head">
+          <h2>Menu</h2>
+          <button id="menu-close" class="menu-close" type="button">Close</button>
+        </div>
+        <div id="profile-controls" class="profile-controls hidden">
+          <label class="menu-label" for="profile-name-input">Current Profile Name</label>
+          <div class="menu-row">
+            <input id="profile-name-input" class="menu-input" type="text" maxlength="24" />
+            <button id="profile-name-save" class="menu-btn" type="button">Save Name</button>
+          </div>
+          <label class="menu-label" for="profile-select">Switch Profile</label>
+          <div class="menu-row">
+            <select id="profile-select" class="menu-select"></select>
+            <button id="profile-create" class="menu-btn" type="button">New Profile</button>
+          </div>
+        </div>
+        <p id="profile-locked" class="shop-meta">Buy Profile Switch in the shop to unlock profile tools.</p>
+      </aside>
       <button id="pixel" class="pixel" type="button" aria-label="Click the pixel for cash"></button>
     </section>
     <section id="shop-screen" class="shop-screen hidden" aria-label="Shop screen">
