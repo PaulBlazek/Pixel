@@ -164,6 +164,26 @@ function loadGame() {
   }
 }
 
+function reset_game() {
+  const confirmation = window.prompt('Type RESET to wipe all save data.', "");
+  if (confirmation !== "RESET") {
+    return;
+  }
+
+  localStorage.removeItem(SAVE_KEY);
+  if (saveTimer !== null) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+
+  state.cash = 0;
+  state.shopFeatureUnlocked = false;
+  state.purchasedItems = [];
+  state.inShopView = false;
+
+  render();
+}
+
 pixelBtn.addEventListener("click", () => {
   state.cash += 1;
   render();
@@ -225,3 +245,5 @@ document.addEventListener("visibilitychange", () => {
 
 loadGame();
 render();
+
+window.reset_game = reset_game;
