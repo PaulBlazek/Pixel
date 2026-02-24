@@ -9,12 +9,13 @@ const shopCloseBtn = document.getElementById("shop-close");
 const SAVE_KEY = "pixel-save-v1";
 const SAVE_VERSION = 2;
 
-const SHOP_FEATURE_COST = 100;
+const SHOP_FEATURE_COST = 20;
 const SHOP_ITEMS = [
   {
     id: "shop-choices",
     name: "Shop Choices",
-    cost: 100,
+    description: "Unlocks a suspiciously large catalog of premium nonsense.",
+    cost: 30,
     unlocks: [
       "dummy-1",
       "dummy-2",
@@ -28,16 +29,16 @@ const SHOP_ITEMS = [
       "dummy-10"
     ]
   },
-  { id: "dummy-1", name: "Tiny Billboard", cost: 25, requires: ["shop-choices"] },
-  { id: "dummy-2", name: "Color Tax", cost: 30, requires: ["shop-choices"] },
-  { id: "dummy-3", name: "Prestige Smudge", cost: 40, requires: ["shop-choices"] },
-  { id: "dummy-4", name: "Loot Pixel", cost: 55, requires: ["shop-choices"] },
-  { id: "dummy-5", name: "Idle Wiggle", cost: 80, requires: ["shop-choices"] },
-  { id: "dummy-6", name: "Neon Drip", cost: 125, requires: ["shop-choices"] },
-  { id: "dummy-7", name: "Golden Alias", cost: 180, requires: ["shop-choices"] },
-  { id: "dummy-8", name: "Pity Multiplier", cost: 260, requires: ["shop-choices"] },
-  { id: "dummy-9", name: "Whale Magnet", cost: 400, requires: ["shop-choices"] },
-  { id: "dummy-10", name: "Monetized Blink", cost: 600, requires: ["shop-choices"] }
+  { id: "dummy-1", name: "Tiny Billboard", description: "A very small ad space with very large promises.", cost: 25, requires: ["shop-choices"] },
+  { id: "dummy-2", name: "Color Tax", description: "Premium hues sold separately, naturally.", cost: 30, requires: ["shop-choices"] },
+  { id: "dummy-3", name: "Prestige Smudge", description: "A decorative blur that screams elite value.", cost: 40, requires: ["shop-choices"] },
+  { id: "dummy-4", name: "Loot Pixel", description: "Every click feels rarer if the label says loot.", cost: 55, requires: ["shop-choices"] },
+  { id: "dummy-5", name: "Idle Wiggle", description: "The pixel wiggles to imply complicated systems.", cost: 80, requires: ["shop-choices"] },
+  { id: "dummy-6", name: "Neon Drip", description: "Adds glow. Adds hype. Adds no restraint.", cost: 125, requires: ["shop-choices"] },
+  { id: "dummy-7", name: "Golden Alias", description: "Rename your ambition in tasteful fake gold.", cost: 180, requires: ["shop-choices"] },
+  { id: "dummy-8", name: "Pity Multiplier", description: "For players who almost had enough.", cost: 260, requires: ["shop-choices"] },
+  { id: "dummy-9", name: "Whale Magnet", description: "Attracts high rollers and bad decisions.", cost: 400, requires: ["shop-choices"] },
+  { id: "dummy-10", name: "Monetized Blink", description: "Now even blinking feels premium.", cost: 600, requires: ["shop-choices"] }
 ];
 
 const itemById = new Map(SHOP_ITEMS.map((item) => [item.id, item]));
@@ -67,17 +68,6 @@ function isUnlocked(item) {
   return item.requires.every((requiredId) => owned.has(requiredId));
 }
 
-function getUnlockNames(item) {
-  if (!item.unlocks || item.unlocks.length === 0) {
-    return "None";
-  }
-  return item.unlocks
-    .map((unlockedId) => itemById.get(unlockedId))
-    .filter(Boolean)
-    .map((unlockedItem) => unlockedItem.name)
-    .join(", ");
-}
-
 function canSeeShopButton() {
   return state.shopFeatureUnlocked || state.cash >= SHOP_FEATURE_COST;
 }
@@ -96,18 +86,17 @@ function renderShopItems() {
     return;
   }
 
-  const visibleItems = SHOP_ITEMS.filter((item) => isUnlocked(item) || owned.has(item.id));
+  const visibleItems = SHOP_ITEMS.filter((item) => !owned.has(item.id) && isUnlocked(item));
   shopItemsEl.innerHTML = visibleItems
     .map((item) => {
-      const ownedItem = owned.has(item.id);
       const affordable = state.cash >= item.cost;
-      const buyDisabled = ownedItem || !affordable;
-      const buttonText = ownedItem ? "Owned" : `Buy (${item.cost} cash)`;
+      const buyDisabled = !affordable;
+      const buttonText = `Buy (${item.cost} cash)`;
       return `
-        <article class="shop-item${ownedItem ? " is-owned" : ""}" role="listitem">
+        <article class="shop-item" role="listitem">
           <h3>${item.name}</h3>
+          <p class="shop-meta">${item.description || "No description yet."}</p>
           <p class="shop-meta">Cost: ${item.cost.toLocaleString()} cash</p>
-          <p class="shop-meta">Unlocks: ${getUnlockNames(item)}</p>
           <button class="shop-buy" data-item-id="${item.id}" type="button" ${buyDisabled ? "disabled" : ""}>
             ${buttonText}
           </button>
