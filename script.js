@@ -15,6 +15,7 @@ const profileNameInput = document.getElementById("profile-name-input");
 const profileNameSaveBtn = document.getElementById("profile-name-save");
 const profileSelectEl = document.getElementById("profile-select");
 const profileCreateBtn = document.getElementById("profile-create");
+const profileDeleteBtn = document.getElementById("profile-delete");
 
 const SAVE_KEY = "pixel-save-v1";
 const SAVE_VERSION = 4;
@@ -23,11 +24,12 @@ const SHOP_FEATURE_COST = 20;
 const BASE_SPEED_LIMIT = 5;
 const SPEED_WARNING_STICK_MS = 3200;
 const PROFILE_SWITCH_ITEM_ID = "profile-switch";
+const PROFILE_DELETE_ITEM_ID = "profile-delete";
 const MENU_UNLOCK_ITEM_ID = "menu-system";
 const SPEED_LIMIT_1_ITEM_ID = "speed-limit-1";
 const SPEED_LIMIT_2_ITEM_ID = "speed-limit-2";
 const SPEED_LIMIT_REMOVE_ITEM_ID = "speed-limit-remove";
-const GLOBAL_UNLOCK_ITEMS = new Set([MENU_UNLOCK_ITEM_ID, PROFILE_SWITCH_ITEM_ID]);
+const GLOBAL_UNLOCK_ITEMS = new Set([MENU_UNLOCK_ITEM_ID, PROFILE_SWITCH_ITEM_ID, PROFILE_DELETE_ITEM_ID]);
 const SPEED_UPGRADE_ITEMS = new Set([SPEED_LIMIT_1_ITEM_ID, SPEED_LIMIT_2_ITEM_ID, SPEED_LIMIT_REMOVE_ITEM_ID]);
 
 const SHOP_ITEMS = [
@@ -63,7 +65,15 @@ const SHOP_ITEMS = [
     name: "Profile Switch",
     description: "Unlock profile naming, swapping, and creating fresh profiles.",
     cost: 50,
-    requires: ["menu-system"]
+    requires: ["menu-system"],
+    unlocks: [PROFILE_DELETE_ITEM_ID]
+  },
+  {
+    id: PROFILE_DELETE_ITEM_ID,
+    name: "Profile Delete",
+    description: "Unlock the ability to delete profiles from the menu.",
+    cost: 30,
+    requires: [PROFILE_SWITCH_ITEM_ID]
   },
   {
     id: SPEED_LIMIT_1_ITEM_ID,
@@ -290,6 +300,7 @@ function renderShopItems(profile) {
 
 function renderProfileControls(profile) {
   const profileSwitchUnlocked = hasGlobalUnlock(PROFILE_SWITCH_ITEM_ID);
+  const profileDeleteUnlocked = hasGlobalUnlock(PROFILE_DELETE_ITEM_ID);
   profileControlsEl.classList.toggle("hidden", !profileSwitchUnlocked);
   profileLockedEl.classList.toggle("hidden", profileSwitchUnlocked);
 
@@ -306,6 +317,7 @@ function renderProfileControls(profile) {
       return `<option value="${profileId}" ${selected}>${listedProfile.name}</option>`;
     })
     .join("");
+  profileDeleteBtn.classList.toggle("hidden", !profileDeleteUnlocked);
 }
 
 function render() {
@@ -506,6 +518,40 @@ function createNewProfile() {
   state.isMenuOpen = true;
 }
 
+function clearRuntimeForProfile(profileId) {
+  delete runtime.grantedClickTimestampsByProfile[profileId];
+  delete runtime.speedWarningByProfile[profileId];
+}
+
+function ensureAtLeastOneProfile() {
+  if (state.profileOrder.length > 0) {
+    return;
+  }
+  const fallbackId = "profile-1";
+  state.profiles[fallbackId] = createFreshProfile("Profile 1");
+  state.profileOrder = [fallbackId];
+  state.activeProfileId = fallbackId;
+  state.inShopView = false;
+}
+
+function deleteProfile(profileId) {
+  if (!state.profiles[profileId]) {
+    return false;
+  }
+
+  delete state.profiles[profileId];
+  state.profileOrder = state.profileOrder.filter((id) => id !== profileId);
+  clearRuntimeForProfile(profileId);
+
+  if (state.activeProfileId === profileId) {
+    state.activeProfileId = state.profileOrder[0] || "";
+    state.inShopView = false;
+  }
+
+  ensureAtLeastOneProfile();
+  return true;
+}
+
 function reset_game() {
   const confirmation = window.prompt("Type RESET to wipe all save data.", "");
   if (confirmation !== "RESET") {
@@ -659,6 +705,33 @@ profileCreateBtn.addEventListener("click", () => {
     return;
   }
   createNewProfile();
+  render();
+  queueSave();
+});
+
+profileDeleteBtn.addEventListener("click", () => {
+  if (!hasGlobalUnlock(PROFILE_DELETE_ITEM_ID)) {
+    return;
+  }
+
+  const selectedId = profileSelectEl.value;
+  const targetProfile = state.profiles[selectedId];
+  if (!targetProfile) {
+    return;
+  }
+
+  const confirmationText = `DELETE ${targetProfile.name}`;
+  const promptText = `Type exactly "${confirmationText}" to permanently delete this profile.`;
+  const input = window.prompt(promptText, "");
+  if (input !== confirmationText) {
+    return;
+  }
+
+  const deleted = deleteProfile(selectedId);
+  if (!deleted) {
+    return;
+  }
+
   render();
   queueSave();
 });
