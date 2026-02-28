@@ -186,6 +186,29 @@ const SHOP_ITEMS = [
     requires: ["faster-mines-2"]
   },
   {
+    id: "mine-insurance-1",
+    name: "Mine Insurance",
+    description: "Buy Insurance against bad luck: tails on mine flips now pay 10 cash each.",
+    cost: 400,
+    requires: ["cash-mine"],
+    unlocks: ["mine-insurance-2"]
+  },
+  {
+    id: "mine-insurance-2",
+    name: "Mine Insurance II",
+    description: "Improved coverage: tails now pay 25 cash each.",
+    cost: 1000,
+    requires: ["mine-insurance-1"],
+    unlocks: ["mine-insurance-3"]
+  },
+  {
+    id: "mine-insurance-3",
+    name: "Mine Insurance III",
+    description: "Platinum policy: tails now pay 60 cash each.",
+    cost: 2000,
+    requires: ["mine-insurance-2"]
+  },
+  {
     id: "click-upgrade",
     name: "Click Upgrade",
     description: "Each click grants +1 extra cash.",
@@ -353,6 +376,34 @@ function getMineIntervalMs(profile) {
   return CASH_MINE_INTERVAL_MS;
 }
 
+function getMineTailPayout(profile) {
+  if (hasItem(profile, "mine-insurance-3")) {
+    return 60;
+  }
+  if (hasItem(profile, "mine-insurance-2")) {
+    return 25;
+  }
+  if (hasItem(profile, "mine-insurance-1")) {
+    return 10;
+  }
+  return 0;
+}
+
+function getMineUpgradeCountForInsurance(profile) {
+  const owned = getOwnedSet(profile);
+  return [
+    "more-mines-1",
+    "more-mines-2",
+    "more-mines-3",
+    "deeper-mines-1",
+    "deeper-mines-2",
+    "deeper-mines-3",
+    "faster-mines-1",
+    "faster-mines-2",
+    "faster-mines-3"
+  ].reduce((count, itemId) => count + (owned.has(itemId) ? 1 : 0), 0);
+}
+
 function sanitizeHexColor(value, fallback = "#00ffc3") {
   if (typeof value !== "string") {
     return fallback;
@@ -413,6 +464,9 @@ function shouldShowItem(profile, item, owned) {
     return false;
   }
   if (SPEED_UPGRADE_ITEMS.has(item.id) && !profile.speedLimitDiscovered) {
+    return false;
+  }
+  if (item.id === "mine-insurance-1" && getMineUpgradeCountForInsurance(profile) < 3) {
     return false;
   }
   return isUnlocked(profile, item);
@@ -903,9 +957,11 @@ function runCashMineTick(profileId, profile, now) {
 
   const mineCount = getMineCount(profile);
   const payoutPerHeads = getMinePayout(profile);
+  const payoutPerTails = getMineTailPayout(profile);
   const outcomes = Array.from({ length: mineCount }, () => Math.random() < 0.5);
   const heads = outcomes.filter(Boolean).length;
-  const totalPayout = heads * payoutPerHeads;
+  const tails = mineCount - heads;
+  const totalPayout = (heads * payoutPerHeads) + (tails * payoutPerTails);
 
   if (totalPayout > 0) {
     profile.cash += totalPayout;
