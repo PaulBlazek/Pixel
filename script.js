@@ -205,7 +205,7 @@ const SHOP_ITEMS = [
     id: "click-upgrade-3",
     name: "Click Upgrade III",
     description: "Adds +5 cash per click (10 total).",
-    cost: 1500,
+    cost: 3000,
     requires: ["click-upgrade-2"]
   },
   {
