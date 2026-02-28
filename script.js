@@ -197,7 +197,7 @@ const SHOP_ITEMS = [
     id: "click-upgrade-2",
     name: "Click Upgrade II",
     description: "Adds +3 cash per click (5 total).",
-    cost: 1200,
+    cost: 500,
     requires: ["click-upgrade"],
     unlocks: ["click-upgrade-3"]
   },
@@ -205,7 +205,7 @@ const SHOP_ITEMS = [
     id: "click-upgrade-3",
     name: "Click Upgrade III",
     description: "Adds +5 cash per click (10 total).",
-    cost: 3000,
+    cost: 1500,
     requires: ["click-upgrade-2"]
   },
   {
