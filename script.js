@@ -19,6 +19,10 @@ const profileNameSaveBtn = document.getElementById("profile-name-save");
 const profileSelectEl = document.getElementById("profile-select");
 const profileCreateBtn = document.getElementById("profile-create");
 const profileDeleteBtn = document.getElementById("profile-delete");
+const pixelColorControlsEl = document.getElementById("pixel-color-controls");
+const pixelColorInput = document.getElementById("pixel-color-input");
+const pixelColorSaveBtn = document.getElementById("pixel-color-save");
+const pixelColorResetBtn = document.getElementById("pixel-color-reset");
 
 const SAVE_KEY = "pixel-save-v1";
 const SAVE_VERSION = 5;
@@ -47,7 +51,7 @@ const SHOP_ITEMS = [
       "menu-system",
       "cash-mine",
       "click-upgrade",
-      "dummy-2",
+      "pixel_color_customizer",
       "dummy-3",
       "dummy-6",
       "dummy-7",
@@ -84,7 +88,7 @@ const SHOP_ITEMS = [
     id: SPEED_LIMIT_1_ITEM_ID,
     name: "Fast Fingers",
     description: "Raise click speed limit from 5/s to 10/s.",
-    cost: 150,
+    cost: 500,
     requires: ["shop-choices"],
     unlocks: [SPEED_LIMIT_2_ITEM_ID]
   },
@@ -92,7 +96,7 @@ const SHOP_ITEMS = [
     id: SPEED_LIMIT_2_ITEM_ID,
     name: "Flaming Fingers",
     description: "Raise click speed limit from 10/s to 20/s.",
-    cost: 500,
+    cost: 1000,
     requires: [SPEED_LIMIT_1_ITEM_ID],
     unlocks: [SPEED_LIMIT_REMOVE_ITEM_ID]
   },
@@ -100,10 +104,16 @@ const SHOP_ITEMS = [
     id: SPEED_LIMIT_REMOVE_ITEM_ID,
     name: "Remove Speed Limit",
     description: "Remove click throttling completely.",
-    cost: 1000,
+    cost: 10000,
     requires: [SPEED_LIMIT_2_ITEM_ID]
   },
-  { id: "dummy-2", name: "Color Tax", description: "Premium hues sold separately, naturally.", cost: 30, requires: ["shop-choices"] },
+  {
+    id: "pixel_color_customizer",
+    name: "Pixel Color Customizer",
+    description: "Unlocks setting a custom pixel color in the menu.",
+    cost: 50,
+    requires: ["shop-choices"]
+  },
   { id: "dummy-3", name: "Prestige Smudge", description: "A decorative blur that screams elite value.", cost: 40, requires: ["shop-choices"] },
   {
     id: "cash-mine",
@@ -138,7 +148,8 @@ const state = {
       cash: 0,
       shopFeatureUnlocked: false,
       purchasedItems: [],
-      speedLimitDiscovered: false
+      speedLimitDiscovered: false,
+      pixelColor: "#00ffc3"
     }
   },
   inShopView: false,
@@ -173,6 +184,37 @@ function hasGlobalUnlock(itemId) {
 
 function getClickValue(profile) {
   return 1 + (hasItem(profile, "click-upgrade") ? 1 : 0);
+}
+
+function sanitizeHexColor(value, fallback = "#00ffc3") {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const trimmed = value.trim();
+  if (!/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+    return fallback;
+  }
+  return trimmed.toLowerCase();
+}
+
+function getPixelColor(profile) {
+  return sanitizeHexColor(profile.pixelColor, "#00ffc3");
+}
+
+function getShadowColor(hexColor) {
+  const r = parseInt(hexColor.slice(1, 3), 16);
+  const g = parseInt(hexColor.slice(3, 5), 16);
+  const b = parseInt(hexColor.slice(5, 7), 16);
+  const darken = (channel) => Math.max(0, Math.floor(channel * 0.58));
+  const toHex = (channel) => channel.toString(16).padStart(2, "0");
+  return `#${toHex(darken(r))}${toHex(darken(g))}${toHex(darken(b))}`;
+}
+
+function applyPixelColor(profile) {
+  const baseColor = getPixelColor(profile);
+  const shadowColor = getShadowColor(baseColor);
+  pixelBtn.style.setProperty("--pixel-custom", baseColor);
+  pixelBtn.style.setProperty("--pixel-shadow-custom", shadowColor);
 }
 
 function isUnlocked(profile, item) {
@@ -347,8 +389,14 @@ function renderShopItems(profile) {
 function renderProfileControls(profile) {
   const profileSwitchUnlocked = hasGlobalUnlock(PROFILE_SWITCH_ITEM_ID);
   const profileDeleteUnlocked = hasGlobalUnlock(PROFILE_DELETE_ITEM_ID);
+  const colorCustomizerUnlocked = hasItem(profile, "pixel_color_customizer");
   profileControlsEl.classList.toggle("hidden", !profileSwitchUnlocked);
   profileLockedEl.classList.toggle("hidden", profileSwitchUnlocked);
+  pixelColorControlsEl.classList.toggle("hidden", !colorCustomizerUnlocked);
+
+  if (colorCustomizerUnlocked) {
+    pixelColorInput.value = getPixelColor(profile);
+  }
 
   if (!profileSwitchUnlocked) {
     return;
@@ -383,6 +431,7 @@ function render() {
 
   updateShopVisibility();
   updateMenuVisibility();
+  applyPixelColor(profile);
   renderShopItems(profile);
   renderProfileControls(profile);
   renderSpeedWarning(profile);
@@ -400,7 +449,8 @@ function buildSaveState() {
       cash: profile.cash,
       shopFeatureUnlocked: profile.shopFeatureUnlocked,
       purchasedItems: profile.purchasedItems,
-      speedLimitDiscovered: profile.speedLimitDiscovered
+      speedLimitDiscovered: profile.speedLimitDiscovered,
+      pixelColor: getPixelColor(profile)
     };
   });
 
@@ -437,7 +487,8 @@ function createFreshProfile(name) {
     cash: 0,
     shopFeatureUnlocked: false,
     purchasedItems: [],
-    speedLimitDiscovered: false
+    speedLimitDiscovered: false,
+    pixelColor: "#00ffc3"
   };
 }
 
@@ -465,7 +516,8 @@ function sanitizeProfile(rawProfile, fallbackName) {
     cash: safeCash,
     shopFeatureUnlocked: Boolean(rawProfile?.shopFeatureUnlocked),
     purchasedItems: sanitizePurchasedItems(rawProfile?.purchasedItems),
-    speedLimitDiscovered: Boolean(rawProfile?.speedLimitDiscovered)
+    speedLimitDiscovered: Boolean(rawProfile?.speedLimitDiscovered),
+    pixelColor: sanitizeHexColor(rawProfile?.pixelColor, "#00ffc3")
   };
 }
 
@@ -599,7 +651,6 @@ function deleteProfile(profileId) {
 }
 
 function runCashMineTick() {
-  console.log("Running cash mine tick");
   let changedSaveData = false;
   let activeProfileMined = false;
 
@@ -831,6 +882,26 @@ profileDeleteBtn.addEventListener("click", () => {
     return;
   }
 
+  render();
+  queueSave();
+});
+
+pixelColorSaveBtn.addEventListener("click", () => {
+  const profile = getProfile();
+  if (!hasItem(profile, "pixel_color_customizer")) {
+    return;
+  }
+  profile.pixelColor = sanitizeHexColor(pixelColorInput.value, getPixelColor(profile));
+  render();
+  queueSave();
+});
+
+pixelColorResetBtn.addEventListener("click", () => {
+  const profile = getProfile();
+  if (!hasItem(profile, "pixel_color_customizer")) {
+    return;
+  }
+  profile.pixelColor = "#00ffc3";
   render();
   queueSave();
 });

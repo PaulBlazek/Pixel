@@ -238,6 +238,17 @@ body {
   color: var(--text);
 }
 
+.menu-color-input {
+  width: 2.4rem;
+  min-width: 2.4rem;
+  height: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.15rem;
+  cursor: pointer;
+}
+
 .menu-select option {
   color: #f8fbff;
   background-color: #122747;
@@ -261,8 +272,8 @@ body {
   height: 40px;
   border: 0;
   border-radius: 8px;
-  background: var(--pixel);
-  box-shadow: 0 0 0 4px var(--pixel-shadow), 0 10px 25px rgba(0, 0, 0, 0.35);
+  background: var(--pixel-custom, var(--pixel));
+  box-shadow: 0 0 0 4px var(--pixel-shadow-custom, var(--pixel-shadow)), 0 10px 25px rgba(0, 0, 0, 0.35);
   cursor: pointer;
   transition: transform 80ms ease, box-shadow 80ms ease;
 }
@@ -273,7 +284,7 @@ body {
 
 .pixel:active {
   transform: scale(0.92);
-  box-shadow: 0 0 0 3px var(--pixel-shadow), 0 6px 15px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 3px var(--pixel-shadow-custom, var(--pixel-shadow)), 0 6px 15px rgba(0, 0, 0, 0.35);
 }
 
 .speed-warning {
