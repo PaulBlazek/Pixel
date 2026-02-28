@@ -1,6 +1,9 @@
 const cashEl = document.getElementById("cash");
 const pixelBtn = document.getElementById("pixel");
 const speedWarningEl = document.getElementById("speed-warning");
+const coinFlipEl = document.getElementById("coin-flip");
+const coinFaceEl = document.getElementById("coin-face");
+const coinTextEl = document.getElementById("coin-text");
 const shopToggleBtn = document.getElementById("shop-toggle");
 const gameScreenEl = document.getElementById("game-screen");
 const shopScreenEl = document.getElementById("shop-screen");
@@ -18,11 +21,13 @@ const profileCreateBtn = document.getElementById("profile-create");
 const profileDeleteBtn = document.getElementById("profile-delete");
 
 const SAVE_KEY = "pixel-save-v1";
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 
 const SHOP_FEATURE_COST = 20;
 const BASE_SPEED_LIMIT = 5;
 const SPEED_WARNING_STICK_MS = 3200;
+const CASH_MINE_PAYOUT = 50;
+const CASH_MINE_INTERVAL_MS = 60000;
 const PROFILE_SWITCH_ITEM_ID = "profile-switch";
 const PROFILE_DELETE_ITEM_ID = "profile-delete";
 const MENU_UNLOCK_ITEM_ID = "menu-system";
@@ -40,10 +45,10 @@ const SHOP_ITEMS = [
     cost: 30,
     unlocks: [
       "menu-system",
+      "cash-mine",
+      "click-upgrade",
       "dummy-2",
       "dummy-3",
-      "dummy-4",
-      "dummy-5",
       "dummy-6",
       "dummy-7",
       "dummy-8",
@@ -100,8 +105,20 @@ const SHOP_ITEMS = [
   },
   { id: "dummy-2", name: "Color Tax", description: "Premium hues sold separately, naturally.", cost: 30, requires: ["shop-choices"] },
   { id: "dummy-3", name: "Prestige Smudge", description: "A decorative blur that screams elite value.", cost: 40, requires: ["shop-choices"] },
-  { id: "dummy-4", name: "Loot Pixel", description: "Every click feels rarer if the label says loot.", cost: 55, requires: ["shop-choices"] },
-  { id: "dummy-5", name: "Idle Wiggle", description: "The pixel wiggles to imply complicated systems.", cost: 80, requires: ["shop-choices"] },
+  {
+    id: "cash-mine",
+    name: "Cash Mine",
+    description: "Every minute flips a coin. Heads pays 50 cash, tails pays 0. Works even when on another profile!",
+    cost: 50,
+    requires: ["shop-choices"]
+  },
+  {
+    id: "click-upgrade",
+    name: "Click Upgrade",
+    description: "Each click grants +1 extra cash.",
+    cost: 230,
+    requires: ["shop-choices"]
+  },
   { id: "dummy-6", name: "Neon Drip", description: "Adds glow. Adds hype. Adds no restraint.", cost: 125, requires: ["shop-choices"] },
   { id: "dummy-7", name: "Golden Alias", description: "Rename your ambition in tasteful fake gold.", cost: 180, requires: ["shop-choices"] },
   { id: "dummy-8", name: "Pity Multiplier", description: "For players who almost had enough.", cost: 260, requires: ["shop-choices"] },
@@ -130,7 +147,9 @@ const state = {
 
 const runtime = {
   grantedClickTimestampsByProfile: {},
-  speedWarningByProfile: {}
+  speedWarningByProfile: {},
+  cashMineIntervalId: null,
+  coinFlipAnimTimerId: null
 };
 
 let saveTimer = null;
@@ -150,6 +169,10 @@ function hasItem(profile, itemId) {
 
 function hasGlobalUnlock(itemId) {
   return state.globalUnlocks.includes(itemId);
+}
+
+function getClickValue(profile) {
+  return 1 + (hasItem(profile, "click-upgrade") ? 1 : 0);
 }
 
 function isUnlocked(profile, item) {
@@ -237,6 +260,29 @@ function setSpeedWarning(profileId, text) {
 
 function clearSpeedWarning(profileId) {
   delete runtime.speedWarningByProfile[profileId];
+}
+
+function playCoinFlipAnimation(isHeads, payout) {
+  if (!coinFlipEl || !coinFaceEl || !coinTextEl) {
+    return;
+  }
+
+  if (runtime.coinFlipAnimTimerId !== null) {
+    clearTimeout(runtime.coinFlipAnimTimerId);
+    runtime.coinFlipAnimTimerId = null;
+  }
+
+  coinFaceEl.textContent = isHeads ? "H" : "T";
+  coinTextEl.textContent = isHeads ? `Heads! +${payout.toLocaleString()} cash` : "Tails... +0 cash";
+  coinFlipEl.classList.remove("hidden", "is-playing");
+  void coinFlipEl.offsetWidth;
+  coinFlipEl.classList.add("is-playing");
+
+  runtime.coinFlipAnimTimerId = setTimeout(() => {
+    runtime.coinFlipAnimTimerId = null;
+    coinFlipEl.classList.remove("is-playing");
+    coinFlipEl.classList.add("hidden");
+  }, 2200);
 }
 
 function renderSpeedWarning(profile) {
@@ -552,6 +598,46 @@ function deleteProfile(profileId) {
   return true;
 }
 
+function runCashMineTick() {
+  console.log("Running cash mine tick");
+  let changedSaveData = false;
+  let activeProfileMined = false;
+
+  state.profileOrder.forEach((profileId) => {
+    const profile = state.profiles[profileId];
+    if (!profile || !hasItem(profile, "cash-mine")) {
+      return;
+    }
+
+    const isHeads = Math.random() < 0.5;
+    const payout = isHeads ? CASH_MINE_PAYOUT : 0;
+    if (payout > 0) {
+      profile.cash += payout;
+      changedSaveData = true;
+    }
+
+    if (profileId === state.activeProfileId) {
+      playCoinFlipAnimation(isHeads, payout);
+      activeProfileMined = true;
+    }
+  });
+
+  if (activeProfileMined) {
+    render();
+  }
+  if (changedSaveData) {
+    queueSave();
+  }
+}
+
+function startCashMineLoop() {
+  if (runtime.cashMineIntervalId !== null) {
+    clearInterval(runtime.cashMineIntervalId);
+    runtime.cashMineIntervalId = null;
+  }
+  runtime.cashMineIntervalId = setInterval(runCashMineTick, CASH_MINE_INTERVAL_MS);
+}
+
 function reset_game() {
   const confirmation = window.prompt("Type RESET to wipe all save data.", "");
   if (confirmation !== "RESET") {
@@ -572,7 +658,20 @@ function reset_game() {
   state.isMenuOpen = false;
   runtime.grantedClickTimestampsByProfile = {};
   runtime.speedWarningByProfile = {};
+  if (runtime.cashMineIntervalId !== null) {
+    clearInterval(runtime.cashMineIntervalId);
+    runtime.cashMineIntervalId = null;
+  }
+  if (runtime.coinFlipAnimTimerId !== null) {
+    clearTimeout(runtime.coinFlipAnimTimerId);
+    runtime.coinFlipAnimTimerId = null;
+  }
+  if (coinFlipEl) {
+    coinFlipEl.classList.remove("is-playing");
+    coinFlipEl.classList.add("hidden");
+  }
   clearSpeedWarningRefreshTimer();
+  startCashMineLoop();
   render();
 }
 
@@ -587,7 +686,7 @@ pixelBtn.addEventListener("click", () => {
   let changedSaveData = false;
 
   if (!Number.isFinite(speedLimit) || grantedClickWindow.length < speedLimit) {
-    profile.cash += 1;
+    profile.cash += getClickValue(profile);
     grantedClickWindow.push(now);
     changedSaveData = true;
   } else {
@@ -745,6 +844,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 loadGame();
+startCashMineLoop();
 render();
 
 window.reset_game = reset_game;
