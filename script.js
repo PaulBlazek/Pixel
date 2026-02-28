@@ -49,6 +49,7 @@ const SHOP_ITEMS = [
       "menu-system",
       "cash-mine",
       "click-upgrade",
+      "auto-click-1",
       "pixel-color-customizer",
       "more-mines-1",
       "deeper-mines-1",
@@ -165,7 +166,7 @@ const SHOP_ITEMS = [
     id: "faster-mines-1",
     name: "Faster Mines",
     description: "Mine cycle improves from 60s to 50s.",
-    cost: 380,
+    cost: 100,
     requires: ["cash-mine"],
     unlocks: ["faster-mines-2"]
   },
@@ -173,7 +174,7 @@ const SHOP_ITEMS = [
     id: "faster-mines-2",
     name: "Rapid Mining",
     description: "Mine cycle improves even further from 50s to 40s.",
-    cost: 600,
+    cost: 300,
     requires: ["faster-mines-1"],
     unlocks: ["faster-mines-3"]
   },
@@ -181,15 +182,54 @@ const SHOP_ITEMS = [
     id: "faster-mines-3",
     name: "Blindingly Fast Mining",
     description: "Mine cycle improves from 40s to 30s.",
-    cost: 1500,
+    cost: 1000,
     requires: ["faster-mines-2"]
   },
   {
     id: "click-upgrade",
     name: "Click Upgrade",
     description: "Each click grants +1 extra cash.",
-    cost: 230,
-    requires: ["shop-choices"]
+    cost: 150,
+    requires: ["shop-choices"],
+    unlocks: ["click-upgrade-2"]
+  },
+  {
+    id: "click-upgrade-2",
+    name: "Click Upgrade II",
+    description: "Adds +3 cash per click (5 total).",
+    cost: 1200,
+    requires: ["click-upgrade"],
+    unlocks: ["click-upgrade-3"]
+  },
+  {
+    id: "click-upgrade-3",
+    name: "Click Upgrade III",
+    description: "Adds +5 cash per click (10 total).",
+    cost: 3000,
+    requires: ["click-upgrade-2"]
+  },
+  {
+    id: "auto-click-1",
+    name: "Clicking Intern",
+    description: "Will click the pixel for you once per second. Requires a fee to hire but after that is unpaid labor. Interns do not count against the speed limit.",
+    cost: 200,
+    requires: ["shop-choices"],
+    unlocks: ["auto-click-2"]
+  },
+  {
+    id: "auto-click-2",
+    name: "Another Intern",
+    description: "Hire a second intern for another automatic click per second (2 total).",
+    cost: 200,
+    requires: ["auto-click-1"],
+    unlocks: ["auto-click-3"]
+  },
+  {
+    id: "auto-click-3",
+    name: "Even More Interns",
+    description: "Adds +3 automatic clicks per second (5 total).",
+    cost: 900,
+    requires: ["auto-click-2"]
   },];
 
 const itemById = new Map(SHOP_ITEMS.map((item) => [item.id, item]));
@@ -216,6 +256,7 @@ const runtime = {
   grantedClickTimestampsByProfile: {},
   speedWarningByProfile: {},
   cashMineIntervalId: null,
+  autoClickIntervalId: null,
   cashMineNextTickByProfile: {},
   cashMineIntervalByProfile: {},
   coinFlipAnimTimerId: null,
@@ -242,7 +283,29 @@ function hasGlobalUnlock(itemId) {
 }
 
 function getClickValue(profile) {
-  return 1 + (hasItem(profile, "click-upgrade") ? 1 : 0);
+  if (hasItem(profile, "click-upgrade-3")) {
+    return 10;
+  }
+  if (hasItem(profile, "click-upgrade-2")) {
+    return 5;
+  }
+  if (hasItem(profile, "click-upgrade")) {
+    return 2;
+  }
+  return 1;
+}
+
+function getAutoClicksPerSecond(profile) {
+  if (hasItem(profile, "auto-click-3")) {
+    return 5;
+  }
+  if (hasItem(profile, "auto-click-2")) {
+    return 2;
+  }
+  if (hasItem(profile, "auto-click-1")) {
+    return 1;
+  }
+  return 0;
 }
 
 function getMineCount(profile) {
@@ -443,6 +506,36 @@ function playCoinFlipAnimation(outcomes, payoutPerHeads, totalPayout) {
       coinFlipEl.classList.remove("is-fading", "is-settled");
     }, COIN_RESULT_FADE_MS);
   }, COIN_RESULT_STICK_MS);
+}
+
+function processClick(profile, profileId, now, options = {}) {
+  const enforceSpeedLimit = options.enforceSpeedLimit !== false;
+  if (!enforceSpeedLimit) {
+    profile.cash += getClickValue(profile);
+    return true;
+  }
+
+  const speedLimit = getCurrentSpeedLimit(profile);
+  const grantedClickWindow = getGrantedClickWindow(profileId);
+  pruneClickWindow(grantedClickWindow, now);
+
+  let changedSaveData = false;
+
+  if (!Number.isFinite(speedLimit) || grantedClickWindow.length < speedLimit) {
+    profile.cash += getClickValue(profile);
+    grantedClickWindow.push(now);
+    changedSaveData = true;
+  } else {
+    if (!profile.speedLimitDiscovered) {
+      profile.speedLimitDiscovered = true;
+      changedSaveData = true;
+    }
+    if (profileId === state.activeProfileId) {
+      setSpeedWarning(profileId, `Clicks are currently limited to ${speedLimit}/sec. Upgrade in the shop.`);
+    }
+  }
+
+  return changedSaveData;
 }
 
 function renderSpeedWarning(profile) {
@@ -858,6 +951,49 @@ function startCashMineLoop() {
   runtime.cashMineIntervalId = setInterval(runCashMineScheduler, MINE_HEARTBEAT_MS);
 }
 
+function runAutoClickTick() {
+  const now = Date.now();
+  let changedSaveData = false;
+  let shouldRender = false;
+
+  state.profileOrder.forEach((profileId) => {
+    const profile = state.profiles[profileId];
+    if (!profile) {
+      return;
+    }
+
+    const autoClicks = getAutoClicksPerSecond(profile);
+    if (autoClicks <= 0) {
+      return;
+    }
+
+    for (let i = 0; i < autoClicks; i += 1) {
+      if (processClick(profile, profileId, now, { enforceSpeedLimit: false })) {
+        changedSaveData = true;
+      }
+    }
+
+    if (profileId === state.activeProfileId) {
+      shouldRender = true;
+    }
+  });
+
+  if (shouldRender) {
+    render();
+  }
+  if (changedSaveData) {
+    queueSave();
+  }
+}
+
+function startAutoClickLoop() {
+  if (runtime.autoClickIntervalId !== null) {
+    clearInterval(runtime.autoClickIntervalId);
+    runtime.autoClickIntervalId = null;
+  }
+  runtime.autoClickIntervalId = setInterval(runAutoClickTick, 1000);
+}
+
 function reset_game() {
   const confirmation = window.prompt("Type RESET to wipe all save data.", "");
   if (confirmation !== "RESET") {
@@ -884,6 +1020,10 @@ function reset_game() {
     clearInterval(runtime.cashMineIntervalId);
     runtime.cashMineIntervalId = null;
   }
+  if (runtime.autoClickIntervalId !== null) {
+    clearInterval(runtime.autoClickIntervalId);
+    runtime.autoClickIntervalId = null;
+  }
   if (runtime.coinFlipAnimTimerId !== null) {
     clearTimeout(runtime.coinFlipAnimTimerId);
     runtime.coinFlipAnimTimerId = null;
@@ -898,6 +1038,7 @@ function reset_game() {
   }
   clearSpeedWarningRefreshTimer();
   startCashMineLoop();
+  startAutoClickLoop();
   render();
 }
 
@@ -905,23 +1046,7 @@ pixelBtn.addEventListener("click", () => {
   const profile = getProfile();
   const profileId = state.activeProfileId;
   const now = Date.now();
-  const speedLimit = getCurrentSpeedLimit(profile);
-  const grantedClickWindow = getGrantedClickWindow(profileId);
-  pruneClickWindow(grantedClickWindow, now);
-
-  let changedSaveData = false;
-
-  if (!Number.isFinite(speedLimit) || grantedClickWindow.length < speedLimit) {
-    profile.cash += getClickValue(profile);
-    grantedClickWindow.push(now);
-    changedSaveData = true;
-  } else {
-    if (!profile.speedLimitDiscovered) {
-      profile.speedLimitDiscovered = true;
-      changedSaveData = true;
-    }
-    setSpeedWarning(profileId, `Clicks are currently limited to ${speedLimit}/sec. Upgrade in the shop.`);
-  }
+  const changedSaveData = processClick(profile, profileId, now);
 
   render();
   if (changedSaveData) {
@@ -1091,6 +1216,7 @@ document.addEventListener("visibilitychange", () => {
 
 loadGame();
 startCashMineLoop();
+startAutoClickLoop();
 render();
 
 window.reset_game = reset_game;
