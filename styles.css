@@ -293,6 +293,10 @@ body {
   box-shadow: 0 0 0 3px var(--pixel-shadow-custom, var(--pixel-shadow)), 0 6px 15px rgba(0, 0, 0, 0.35);
 }
 
+.pixel.is-auto-clicking {
+  animation: pixel-auto-click 170ms ease;
+}
+
 .speed-warning {
   position: absolute;
   top: calc(100% + 0.55rem);
@@ -414,6 +418,21 @@ body {
   100% {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes pixel-auto-click {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 4px var(--pixel-shadow-custom, var(--pixel-shadow)), 0 10px 25px rgba(0, 0, 0, 0.35);
+  }
+  40% {
+    transform: scale(0.92);
+    box-shadow: 0 0 0 3px var(--pixel-shadow-custom, var(--pixel-shadow)), 0 6px 15px rgba(0, 0, 0, 0.35);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 4px var(--pixel-shadow-custom, var(--pixel-shadow)), 0 10px 25px rgba(0, 0, 0, 0.35);
   }
 }
 

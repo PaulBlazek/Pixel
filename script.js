@@ -256,11 +256,13 @@ const runtime = {
   grantedClickTimestampsByProfile: {},
   speedWarningByProfile: {},
   cashMineIntervalId: null,
-  autoClickIntervalId: null,
+  autoClickCycleTimerId: null,
+  autoClickBurstTimerIds: [],
   cashMineNextTickByProfile: {},
   cashMineIntervalByProfile: {},
   coinFlipAnimTimerId: null,
-  coinFlipFadeTimerId: null
+  coinFlipFadeTimerId: null,
+  pixelPulseTimerId: null
 };
 
 let saveTimer = null;
@@ -506,6 +508,23 @@ function playCoinFlipAnimation(outcomes, payoutPerHeads, totalPayout) {
       coinFlipEl.classList.remove("is-fading", "is-settled");
     }, COIN_RESULT_FADE_MS);
   }, COIN_RESULT_STICK_MS);
+}
+
+function triggerPixelAutoClickAnimation() {
+  if (!pixelBtn) {
+    return;
+  }
+  if (runtime.pixelPulseTimerId !== null) {
+    clearTimeout(runtime.pixelPulseTimerId);
+    runtime.pixelPulseTimerId = null;
+  }
+  pixelBtn.classList.remove("is-auto-clicking");
+  void pixelBtn.offsetWidth;
+  pixelBtn.classList.add("is-auto-clicking");
+  runtime.pixelPulseTimerId = setTimeout(() => {
+    runtime.pixelPulseTimerId = null;
+    pixelBtn.classList.remove("is-auto-clicking");
+  }, 170);
 }
 
 function processClick(profile, profileId, now, options = {}) {
@@ -951,11 +970,16 @@ function startCashMineLoop() {
   runtime.cashMineIntervalId = setInterval(runCashMineScheduler, MINE_HEARTBEAT_MS);
 }
 
-function runAutoClickTick() {
-  const now = Date.now();
-  let changedSaveData = false;
-  let shouldRender = false;
+function clearAutoClickTimers() {
+  if (runtime.autoClickCycleTimerId !== null) {
+    clearTimeout(runtime.autoClickCycleTimerId);
+    runtime.autoClickCycleTimerId = null;
+  }
+  runtime.autoClickBurstTimerIds.forEach((timerId) => clearTimeout(timerId));
+  runtime.autoClickBurstTimerIds = [];
+}
 
+function runAutoClickCycle() {
   state.profileOrder.forEach((profileId) => {
     const profile = state.profiles[profileId];
     if (!profile) {
@@ -967,31 +991,34 @@ function runAutoClickTick() {
       return;
     }
 
+    const intervalMs = 1000 / autoClicks;
     for (let i = 0; i < autoClicks; i += 1) {
-      if (processClick(profile, profileId, now, { enforceSpeedLimit: false })) {
-        changedSaveData = true;
-      }
-    }
-
-    if (profileId === state.activeProfileId) {
-      shouldRender = true;
+      const delayMs = Math.floor(i * intervalMs);
+      const timeoutId = setTimeout(() => {
+        runtime.autoClickBurstTimerIds = runtime.autoClickBurstTimerIds.filter((id) => id !== timeoutId);
+        const currentProfile = state.profiles[profileId];
+        if (!currentProfile) {
+          return;
+        }
+        const changedSaveData = processClick(currentProfile, profileId, Date.now(), { enforceSpeedLimit: false });
+        if (profileId === state.activeProfileId) {
+          triggerPixelAutoClickAnimation();
+          render();
+        }
+        if (changedSaveData) {
+          queueSave();
+        }
+      }, delayMs);
+      runtime.autoClickBurstTimerIds.push(timeoutId);
     }
   });
 
-  if (shouldRender) {
-    render();
-  }
-  if (changedSaveData) {
-    queueSave();
-  }
+  runtime.autoClickCycleTimerId = setTimeout(runAutoClickCycle, 1000);
 }
 
 function startAutoClickLoop() {
-  if (runtime.autoClickIntervalId !== null) {
-    clearInterval(runtime.autoClickIntervalId);
-    runtime.autoClickIntervalId = null;
-  }
-  runtime.autoClickIntervalId = setInterval(runAutoClickTick, 1000);
+  clearAutoClickTimers();
+  runAutoClickCycle();
 }
 
 function reset_game() {
@@ -1020,10 +1047,7 @@ function reset_game() {
     clearInterval(runtime.cashMineIntervalId);
     runtime.cashMineIntervalId = null;
   }
-  if (runtime.autoClickIntervalId !== null) {
-    clearInterval(runtime.autoClickIntervalId);
-    runtime.autoClickIntervalId = null;
-  }
+  clearAutoClickTimers();
   if (runtime.coinFlipAnimTimerId !== null) {
     clearTimeout(runtime.coinFlipAnimTimerId);
     runtime.coinFlipAnimTimerId = null;
@@ -1036,6 +1060,11 @@ function reset_game() {
     coinFlipEl.classList.remove("is-playing", "is-fading", "is-settled");
     coinFlipEl.classList.add("hidden");
   }
+  if (runtime.pixelPulseTimerId !== null) {
+    clearTimeout(runtime.pixelPulseTimerId);
+    runtime.pixelPulseTimerId = null;
+  }
+  pixelBtn.classList.remove("is-auto-clicking");
   clearSpeedWarningRefreshTimer();
   startCashMineLoop();
   startAutoClickLoop();
