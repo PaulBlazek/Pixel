@@ -5,6 +5,7 @@ const coinFlipEl = document.getElementById("coin-flip");
 const coinTrackEl = document.getElementById("coin-track");
 const coinTextEl = document.getElementById("coin-text");
 const shopToggleBtn = document.getElementById("shop-toggle");
+const shopCashEl = document.getElementById("shop-cash");
 const gameScreenEl = document.getElementById("game-screen");
 const shopScreenEl = document.getElementById("shop-screen");
 const shopItemsEl = document.getElementById("shop-items");
@@ -538,6 +539,7 @@ function render() {
   }
 
   cashEl.textContent = profile.cash.toLocaleString();
+  shopCashEl.textContent = profile.cash.toLocaleString();
   if (!profile.shopFeatureUnlocked) {
     shopToggleBtn.classList.add("is-locked");
     shopToggleBtn.textContent = `\uD83D\uDD12 Unlock Shop (${SHOP_FEATURE_COST} cash)`;
