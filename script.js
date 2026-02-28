@@ -2,7 +2,7 @@ const cashEl = document.getElementById("cash");
 const pixelBtn = document.getElementById("pixel");
 const speedWarningEl = document.getElementById("speed-warning");
 const coinFlipEl = document.getElementById("coin-flip");
-const coinFaceEl = document.getElementById("coin-face");
+const coinTrackEl = document.getElementById("coin-track");
 const coinTextEl = document.getElementById("coin-text");
 const shopToggleBtn = document.getElementById("shop-toggle");
 const gameScreenEl = document.getElementById("game-screen");
@@ -32,14 +32,11 @@ const BASE_SPEED_LIMIT = 5;
 const SPEED_WARNING_STICK_MS = 3200;
 const CASH_MINE_PAYOUT = 50;
 const CASH_MINE_INTERVAL_MS = 60000;
-const PROFILE_SWITCH_ITEM_ID = "profile-switch";
-const PROFILE_DELETE_ITEM_ID = "profile-delete";
-const MENU_UNLOCK_ITEM_ID = "menu-system";
-const SPEED_LIMIT_1_ITEM_ID = "speed-limit-1";
-const SPEED_LIMIT_2_ITEM_ID = "speed-limit-2";
-const SPEED_LIMIT_REMOVE_ITEM_ID = "speed-limit-remove";
-const GLOBAL_UNLOCK_ITEMS = new Set([MENU_UNLOCK_ITEM_ID, PROFILE_SWITCH_ITEM_ID, PROFILE_DELETE_ITEM_ID]);
-const SPEED_UPGRADE_ITEMS = new Set([SPEED_LIMIT_1_ITEM_ID, SPEED_LIMIT_2_ITEM_ID, SPEED_LIMIT_REMOVE_ITEM_ID]);
+const MINE_HEARTBEAT_MS = 1000;
+const COIN_RESULT_STICK_MS = 4200;
+const COIN_RESULT_FADE_MS = 420;
+const GLOBAL_UNLOCK_ITEMS = new Set(["menu-system", "profile-switch", "profile-delete"]);
+const SPEED_UPGRADE_ITEMS = new Set(["speed-limit-1", "speed-limit-2", "speed-limit-remove"]);
 
 const SHOP_ITEMS = [
   {
@@ -51,14 +48,11 @@ const SHOP_ITEMS = [
       "menu-system",
       "cash-mine",
       "click-upgrade",
-      "pixel_color_customizer",
-      "dummy-3",
-      "dummy-6",
-      "dummy-7",
-      "dummy-8",
-      "dummy-9",
-      "dummy-10",
-      SPEED_LIMIT_1_ITEM_ID
+      "pixel-color-customizer",
+      "more-mines-1",
+      "deeper-mines-1",
+      "faster-mines-1",
+      "speed-limit-1"
     ]
   },
   {
@@ -75,47 +69,45 @@ const SHOP_ITEMS = [
     description: "Unlock profile naming, swapping, and creating fresh profiles.",
     cost: 50,
     requires: ["menu-system"],
-    unlocks: [PROFILE_DELETE_ITEM_ID]
+    unlocks: ["profile-delete"]
   },
   {
-    id: PROFILE_DELETE_ITEM_ID,
+    id: "profile-delete",
     name: "Profile Delete",
     description: "Unlock the ability to delete profiles from the menu.",
     cost: 30,
-    requires: [PROFILE_SWITCH_ITEM_ID]
+    requires: ["profile-switch"]
   },
   {
-    id: SPEED_LIMIT_1_ITEM_ID,
+    id: "speed-limit-1",
     name: "Fast Fingers",
     description: "Raise click speed limit from 5/s to 10/s.",
-    cost: 500,
+    cost: 300,
     requires: ["shop-choices"],
-    unlocks: [SPEED_LIMIT_2_ITEM_ID]
+    unlocks: ["speed-limit-2"]
   },
   {
-    id: SPEED_LIMIT_2_ITEM_ID,
+    id: "speed-limit-2",
     name: "Flaming Fingers",
     description: "Raise click speed limit from 10/s to 20/s.",
     cost: 1000,
-    requires: [SPEED_LIMIT_1_ITEM_ID],
-    unlocks: [SPEED_LIMIT_REMOVE_ITEM_ID]
+    requires: ["speed-limit-1"],
+    unlocks: ["speed-limit-remove"]
   },
   {
-    id: SPEED_LIMIT_REMOVE_ITEM_ID,
+    id: "speed-limit-remove",
     name: "Remove Speed Limit",
-    description: "Remove click throttling completely.",
+    description: "Bribe some politicians to remove the click speed limit completely.",
     cost: 10000,
-    requires: [SPEED_LIMIT_2_ITEM_ID]
+    requires: ["speed-limit-2"]
   },
   {
-    id: "pixel_color_customizer",
+    id: "pixel-color-customizer",
     name: "Pixel Color Customizer",
     description: "Unlocks setting a custom pixel color in the menu.",
     cost: 50,
     requires: ["shop-choices"]
-  },
-  { id: "dummy-3", name: "Prestige Smudge", description: "A decorative blur that screams elite value.", cost: 40, requires: ["shop-choices"] },
-  {
+  },{
     id: "cash-mine",
     name: "Cash Mine",
     description: "Every minute flips a coin. Heads pays 50 cash, tails pays 0. Works even when on another profile!",
@@ -123,18 +115,81 @@ const SHOP_ITEMS = [
     requires: ["shop-choices"]
   },
   {
+    id: "more-mines-1",
+    name: "More Mines",
+    description: "Add 1 extra cash mine (2 total).",
+    cost: 300,
+    requires: ["cash-mine"],
+    unlocks: ["more-mines-2"]
+  },
+  {
+    id: "more-mines-2",
+    name: "Even More Mines",
+    description: "Add 3 more cash mines (5 total).",
+    cost: 1200,
+    requires: ["more-mines-1"],
+    unlocks: ["more-mines-3"]
+  },
+  {
+    id: "more-mines-3",
+    name: "Great Mining Franchise",
+    description: "Add 5 more cash mines (10 total).",
+    cost: 7000,
+    requires: ["more-mines-2"]
+  },
+  {
+    id: "deeper-mines-1",
+    name: "Dig Deeper",
+    description: "Raise mine payout per heads from 50 to 75.",
+    cost: 300,
+    requires: ["cash-mine"],
+    unlocks: ["deeper-mines-2"]
+  },
+  {
+    id: "deeper-mines-2",
+    name: "Even Deeper Mines",
+    description: "Raise mine payout per heads even further from 75 to 100.",
+    cost: 900,
+    requires: ["deeper-mines-1"],
+    unlocks: ["deeper-mines-3"]
+  },
+  {
+    id: "deeper-mines-3",
+    name: "Diamond Mining",
+    description: "Raise mine payout per heads from 100 to 200.",
+    cost: 2500,
+    requires: ["deeper-mines-2"]
+  },
+  {
+    id: "faster-mines-1",
+    name: "Faster Mines",
+    description: "Mine cycle improves from 60s to 50s.",
+    cost: 380,
+    requires: ["cash-mine"],
+    unlocks: ["faster-mines-2"]
+  },
+  {
+    id: "faster-mines-2",
+    name: "Rapid Mining",
+    description: "Mine cycle improves even further from 50s to 40s.",
+    cost: 600,
+    requires: ["faster-mines-1"],
+    unlocks: ["faster-mines-3"]
+  },
+  {
+    id: "faster-mines-3",
+    name: "Blindingly Fast Mining",
+    description: "Mine cycle improves from 40s to 30s.",
+    cost: 1500,
+    requires: ["faster-mines-2"]
+  },
+  {
     id: "click-upgrade",
     name: "Click Upgrade",
     description: "Each click grants +1 extra cash.",
     cost: 230,
     requires: ["shop-choices"]
-  },
-  { id: "dummy-6", name: "Neon Drip", description: "Adds glow. Adds hype. Adds no restraint.", cost: 125, requires: ["shop-choices"] },
-  { id: "dummy-7", name: "Golden Alias", description: "Rename your ambition in tasteful fake gold.", cost: 180, requires: ["shop-choices"] },
-  { id: "dummy-8", name: "Pity Multiplier", description: "For players who almost had enough.", cost: 260, requires: ["shop-choices"] },
-  { id: "dummy-9", name: "Whale Magnet", description: "Attracts high rollers and bad decisions.", cost: 400, requires: ["shop-choices"] },
-  { id: "dummy-10", name: "Monetized Blink", description: "Now even blinking feels premium.", cost: 600, requires: ["shop-choices"] }
-];
+  },];
 
 const itemById = new Map(SHOP_ITEMS.map((item) => [item.id, item]));
 
@@ -160,7 +215,10 @@ const runtime = {
   grantedClickTimestampsByProfile: {},
   speedWarningByProfile: {},
   cashMineIntervalId: null,
-  coinFlipAnimTimerId: null
+  cashMineNextTickByProfile: {},
+  cashMineIntervalByProfile: {},
+  coinFlipAnimTimerId: null,
+  coinFlipFadeTimerId: null
 };
 
 let saveTimer = null;
@@ -184,6 +242,49 @@ function hasGlobalUnlock(itemId) {
 
 function getClickValue(profile) {
   return 1 + (hasItem(profile, "click-upgrade") ? 1 : 0);
+}
+
+function getMineCount(profile) {
+  if (!hasItem(profile, "cash-mine")) {
+    return 0;
+  }
+  let mines = 1;
+  if (hasItem(profile, "more-mines-1")) {
+    mines += 1;
+  }
+  if (hasItem(profile, "more-mines-2")) {
+    mines += 3;
+  }
+  if (hasItem(profile, "more-mines-3")) {
+    mines += 5;
+  }
+  return mines;
+}
+
+function getMinePayout(profile) {
+  if (hasItem(profile, "deeper-mines-3")) {
+    return 200;
+  }
+  if (hasItem(profile, "deeper-mines-2")) {
+    return 100;
+  }
+  if (hasItem(profile, "deeper-mines-1")) {
+    return 75;
+  }
+  return CASH_MINE_PAYOUT;
+}
+
+function getMineIntervalMs(profile) {
+  if (hasItem(profile, "faster-mines-3")) {
+    return 30000;
+  }
+  if (hasItem(profile, "faster-mines-2")) {
+    return 40000;
+  }
+  if (hasItem(profile, "faster-mines-1")) {
+    return 50000;
+  }
+  return CASH_MINE_INTERVAL_MS;
 }
 
 function sanitizeHexColor(value, fallback = "#00ffc3") {
@@ -226,13 +327,13 @@ function isUnlocked(profile, item) {
 }
 
 function getCurrentSpeedLimit(profile) {
-  if (hasItem(profile, SPEED_LIMIT_REMOVE_ITEM_ID)) {
+  if (hasItem(profile, "speed-limit-remove")) {
     return Infinity;
   }
-  if (hasItem(profile, SPEED_LIMIT_2_ITEM_ID)) {
+  if (hasItem(profile, "speed-limit-2")) {
     return 20;
   }
-  if (hasItem(profile, SPEED_LIMIT_1_ITEM_ID)) {
+  if (hasItem(profile, "speed-limit-1")) {
     return 10;
   }
   return BASE_SPEED_LIMIT;
@@ -304,8 +405,8 @@ function clearSpeedWarning(profileId) {
   delete runtime.speedWarningByProfile[profileId];
 }
 
-function playCoinFlipAnimation(isHeads, payout) {
-  if (!coinFlipEl || !coinFaceEl || !coinTextEl) {
+function playCoinFlipAnimation(outcomes, payoutPerHeads, totalPayout) {
+  if (!coinFlipEl || !coinTrackEl || !coinTextEl) {
     return;
   }
 
@@ -313,18 +414,34 @@ function playCoinFlipAnimation(isHeads, payout) {
     clearTimeout(runtime.coinFlipAnimTimerId);
     runtime.coinFlipAnimTimerId = null;
   }
+  if (runtime.coinFlipFadeTimerId !== null) {
+    clearTimeout(runtime.coinFlipFadeTimerId);
+    runtime.coinFlipFadeTimerId = null;
+  }
 
-  coinFaceEl.textContent = isHeads ? "H" : "T";
-  coinTextEl.textContent = isHeads ? `Heads! +${payout.toLocaleString()} cash` : "Tails... +0 cash";
-  coinFlipEl.classList.remove("hidden", "is-playing");
+  coinTrackEl.innerHTML = outcomes
+    .map((isHeads, index) =>
+      `<div class="coin-face ${isHeads ? "is-heads" : "is-tails"}" style="--i:${index}">${isHeads ? "H" : "T"}</div>`
+    )
+    .join("");
+
+  const heads = outcomes.filter(Boolean).length;
+  coinTextEl.textContent = `Mines: ${outcomes.length} | Heads: ${heads} | +${totalPayout.toLocaleString()} cash`;
+  coinFlipEl.classList.remove("hidden", "is-playing", "is-fading", "is-settled");
   void coinFlipEl.offsetWidth;
   coinFlipEl.classList.add("is-playing");
 
   runtime.coinFlipAnimTimerId = setTimeout(() => {
     runtime.coinFlipAnimTimerId = null;
     coinFlipEl.classList.remove("is-playing");
-    coinFlipEl.classList.add("hidden");
-  }, 2200);
+    coinFlipEl.classList.add("is-settled");
+    coinFlipEl.classList.add("is-fading");
+    runtime.coinFlipFadeTimerId = setTimeout(() => {
+      runtime.coinFlipFadeTimerId = null;
+      coinFlipEl.classList.add("hidden");
+      coinFlipEl.classList.remove("is-fading", "is-settled");
+    }, COIN_RESULT_FADE_MS);
+  }, COIN_RESULT_STICK_MS);
 }
 
 function renderSpeedWarning(profile) {
@@ -355,7 +472,7 @@ function updateShopVisibility() {
 }
 
 function updateMenuVisibility() {
-  const menuUnlocked = hasGlobalUnlock(MENU_UNLOCK_ITEM_ID);
+  const menuUnlocked = hasGlobalUnlock("menu-system");
   menuToggleBtn.classList.toggle("hidden", !menuUnlocked);
   menuPanelEl.classList.toggle("hidden", !menuUnlocked || !state.isMenuOpen || state.inShopView);
 }
@@ -387,9 +504,9 @@ function renderShopItems(profile) {
 }
 
 function renderProfileControls(profile) {
-  const profileSwitchUnlocked = hasGlobalUnlock(PROFILE_SWITCH_ITEM_ID);
-  const profileDeleteUnlocked = hasGlobalUnlock(PROFILE_DELETE_ITEM_ID);
-  const colorCustomizerUnlocked = hasItem(profile, "pixel_color_customizer");
+  const profileSwitchUnlocked = hasGlobalUnlock("profile-switch");
+  const profileDeleteUnlocked = hasGlobalUnlock("profile-delete");
+  const colorCustomizerUnlocked = hasItem(profile, "pixel-color-customizer");
   profileControlsEl.classList.toggle("hidden", !profileSwitchUnlocked);
   profileLockedEl.classList.toggle("hidden", profileSwitchUnlocked);
   pixelColorControlsEl.classList.toggle("hidden", !colorCustomizerUnlocked);
@@ -496,14 +613,29 @@ function sanitizePurchasedItems(value) {
   if (!Array.isArray(value)) {
     return [];
   }
+  const legacyIdMap = {
+    "pixel_color_customizer": "pixel-color-customizer",
+    "more_mines_1": "more-mines-1",
+    "more_mines_2": "more-mines-2",
+    "more_mines_3": "more-mines-3",
+    "deeper_mines_1": "deeper-mines-1",
+    "deeper_mines_2": "deeper-mines-2",
+    "deeper_mines_3": "deeper-mines-3",
+    "faster_mines_1": "faster-mines-1",
+    "faster_mines_2": "faster-mines-2",
+    "faster_mines_3": "faster-mines-3"
+  };
   const seen = new Set();
-  return value.filter((itemId) => {
+  const normalized = [];
+  value.forEach((rawId) => {
+    const itemId = legacyIdMap[rawId] || rawId;
     if (!itemById.has(itemId) || seen.has(itemId)) {
-      return false;
+      return;
     }
     seen.add(itemId);
-    return true;
+    normalized.push(itemId);
   });
+  return normalized;
 }
 
 function sanitizeProfile(rawProfile, fallbackName) {
@@ -619,6 +751,8 @@ function createNewProfile() {
 function clearRuntimeForProfile(profileId) {
   delete runtime.grantedClickTimestampsByProfile[profileId];
   delete runtime.speedWarningByProfile[profileId];
+  delete runtime.cashMineNextTickByProfile[profileId];
+  delete runtime.cashMineIntervalByProfile[profileId];
 }
 
 function ensureAtLeastOneProfile() {
@@ -650,35 +784,68 @@ function deleteProfile(profileId) {
   return true;
 }
 
-function runCashMineTick() {
+function runCashMineTick(profileId, profile, now) {
   let changedSaveData = false;
-  let activeProfileMined = false;
 
-  state.profileOrder.forEach((profileId) => {
-    const profile = state.profiles[profileId];
-    if (!profile || !hasItem(profile, "cash-mine")) {
-      return;
-    }
+  const mineCount = getMineCount(profile);
+  const payoutPerHeads = getMinePayout(profile);
+  const outcomes = Array.from({ length: mineCount }, () => Math.random() < 0.5);
+  const heads = outcomes.filter(Boolean).length;
+  const totalPayout = heads * payoutPerHeads;
 
-    const isHeads = Math.random() < 0.5;
-    const payout = isHeads ? CASH_MINE_PAYOUT : 0;
-    if (payout > 0) {
-      profile.cash += payout;
-      changedSaveData = true;
-    }
+  if (totalPayout > 0) {
+    profile.cash += totalPayout;
+    changedSaveData = true;
+  }
 
-    if (profileId === state.activeProfileId) {
-      playCoinFlipAnimation(isHeads, payout);
-      activeProfileMined = true;
-    }
-  });
-
-  if (activeProfileMined) {
+  if (profileId === state.activeProfileId) {
+    playCoinFlipAnimation(outcomes, payoutPerHeads, totalPayout);
     render();
   }
+
+  const intervalMs = getMineIntervalMs(profile);
+  runtime.cashMineNextTickByProfile[profileId] = now + intervalMs;
+  runtime.cashMineIntervalByProfile[profileId] = intervalMs;
+
   if (changedSaveData) {
     queueSave();
   }
+}
+
+function runCashMineScheduler() {
+  const now = Date.now();
+
+  state.profileOrder.forEach((profileId) => {
+    const profile = state.profiles[profileId];
+    if (!profile) {
+      return;
+    }
+
+    const mineCount = getMineCount(profile);
+    if (mineCount <= 0) {
+      delete runtime.cashMineNextTickByProfile[profileId];
+      delete runtime.cashMineIntervalByProfile[profileId];
+      return;
+    }
+
+    const intervalMs = getMineIntervalMs(profile);
+    const previousInterval = runtime.cashMineIntervalByProfile[profileId];
+    if (previousInterval && previousInterval !== intervalMs) {
+      runtime.cashMineNextTickByProfile[profileId] = now + intervalMs;
+    }
+
+    if (!runtime.cashMineNextTickByProfile[profileId]) {
+      runtime.cashMineNextTickByProfile[profileId] = now + intervalMs;
+      runtime.cashMineIntervalByProfile[profileId] = intervalMs;
+      return;
+    }
+
+    if (now >= runtime.cashMineNextTickByProfile[profileId]) {
+      runCashMineTick(profileId, profile, now);
+    } else {
+      runtime.cashMineIntervalByProfile[profileId] = intervalMs;
+    }
+  });
 }
 
 function startCashMineLoop() {
@@ -686,7 +853,7 @@ function startCashMineLoop() {
     clearInterval(runtime.cashMineIntervalId);
     runtime.cashMineIntervalId = null;
   }
-  runtime.cashMineIntervalId = setInterval(runCashMineTick, CASH_MINE_INTERVAL_MS);
+  runtime.cashMineIntervalId = setInterval(runCashMineScheduler, MINE_HEARTBEAT_MS);
 }
 
 function reset_game() {
@@ -709,6 +876,8 @@ function reset_game() {
   state.isMenuOpen = false;
   runtime.grantedClickTimestampsByProfile = {};
   runtime.speedWarningByProfile = {};
+  runtime.cashMineNextTickByProfile = {};
+  runtime.cashMineIntervalByProfile = {};
   if (runtime.cashMineIntervalId !== null) {
     clearInterval(runtime.cashMineIntervalId);
     runtime.cashMineIntervalId = null;
@@ -717,8 +886,12 @@ function reset_game() {
     clearTimeout(runtime.coinFlipAnimTimerId);
     runtime.coinFlipAnimTimerId = null;
   }
+  if (runtime.coinFlipFadeTimerId !== null) {
+    clearTimeout(runtime.coinFlipFadeTimerId);
+    runtime.coinFlipFadeTimerId = null;
+  }
   if (coinFlipEl) {
-    coinFlipEl.classList.remove("is-playing");
+    coinFlipEl.classList.remove("is-playing", "is-fading", "is-settled");
     coinFlipEl.classList.add("hidden");
   }
   clearSpeedWarningRefreshTimer();
@@ -811,7 +984,7 @@ shopItemsEl.addEventListener("click", (event) => {
 });
 
 menuToggleBtn.addEventListener("click", () => {
-  if (!hasGlobalUnlock(MENU_UNLOCK_ITEM_ID)) {
+  if (!hasGlobalUnlock("menu-system")) {
     return;
   }
   state.isMenuOpen = !state.isMenuOpen;
@@ -824,7 +997,7 @@ menuCloseBtn.addEventListener("click", () => {
 });
 
 profileNameSaveBtn.addEventListener("click", () => {
-  if (!hasGlobalUnlock(PROFILE_SWITCH_ITEM_ID)) {
+  if (!hasGlobalUnlock("profile-switch")) {
     return;
   }
   const profile = getProfile();
@@ -851,7 +1024,7 @@ profileSelectEl.addEventListener("change", () => {
 });
 
 profileCreateBtn.addEventListener("click", () => {
-  if (!hasGlobalUnlock(PROFILE_SWITCH_ITEM_ID)) {
+  if (!hasGlobalUnlock("profile-switch")) {
     return;
   }
   createNewProfile();
@@ -860,7 +1033,7 @@ profileCreateBtn.addEventListener("click", () => {
 });
 
 profileDeleteBtn.addEventListener("click", () => {
-  if (!hasGlobalUnlock(PROFILE_DELETE_ITEM_ID)) {
+  if (!hasGlobalUnlock("profile-delete")) {
     return;
   }
 
@@ -888,7 +1061,7 @@ profileDeleteBtn.addEventListener("click", () => {
 
 pixelColorSaveBtn.addEventListener("click", () => {
   const profile = getProfile();
-  if (!hasItem(profile, "pixel_color_customizer")) {
+  if (!hasItem(profile, "pixel-color-customizer")) {
     return;
   }
   profile.pixelColor = sanitizeHexColor(pixelColorInput.value, getPixelColor(profile));
@@ -898,7 +1071,7 @@ pixelColorSaveBtn.addEventListener("click", () => {
 
 pixelColorResetBtn.addEventListener("click", () => {
   const profile = getProfile();
-  if (!hasItem(profile, "pixel_color_customizer")) {
+  if (!hasItem(profile, "pixel-color-customizer")) {
     return;
   }
   profile.pixelColor = "#00ffc3";

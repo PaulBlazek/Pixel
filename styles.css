@@ -315,6 +315,20 @@ body {
   place-items: center;
   gap: 0.3rem;
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 420ms ease;
+}
+
+.coin-flip.is-fading {
+  opacity: 0;
+}
+
+.coin-track {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem;
+  max-width: 220px;
 }
 
 .coin-face {
@@ -330,6 +344,15 @@ body {
   opacity: 0;
 }
 
+.coin-face.is-heads {
+  background: radial-gradient(circle at 30% 30%, #fff1b8, #ffc653 65%, #b67a1d);
+}
+
+.coin-face.is-tails {
+  background: radial-gradient(circle at 30% 30%, #d9e9ff, #82a1cc 65%, #516f95);
+  color: #0f1b2a;
+}
+
 .coin-text {
   margin: 0;
   font-size: 0.8rem;
@@ -340,11 +363,23 @@ body {
 }
 
 .coin-flip.is-playing .coin-face {
-  animation: coin-spin 950ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: coin-spin 1300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation-delay: calc(var(--i, 0) * 75ms);
+  animation-fill-mode: both;
+}
+
+.coin-flip.is-settled .coin-face {
+  opacity: 1;
+  transform: rotateY(1440deg) translateY(0);
 }
 
 .coin-flip.is-playing .coin-text {
-  animation: coin-text-fade 2200ms ease;
+  animation: coin-text-in 420ms ease 120ms both;
+}
+
+.coin-flip.is-settled .coin-text {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 @keyframes coin-spin {
@@ -361,24 +396,18 @@ body {
   }
   100% {
     transform: rotateY(1440deg) translateY(0);
-    opacity: 0;
+    opacity: 1;
   }
 }
 
-@keyframes coin-text-fade {
+@keyframes coin-text-in {
   0% {
     opacity: 0;
     transform: translateY(4px);
   }
-  20% {
+  100% {
     opacity: 1;
     transform: translateY(0);
-  }
-  80% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
   }
 }
 
