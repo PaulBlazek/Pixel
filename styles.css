@@ -316,6 +316,25 @@ body {
   opacity: 1;
 }
 
+.bank-warning {
+  position: absolute;
+  top: -2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 0.82rem;
+  color: #ffe6ad;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 220ms ease;
+  pointer-events: none;
+}
+
+.bank-warning.is-visible {
+  opacity: 1;
+}
+
 .coin-flip {
   position: absolute;
   top: calc(100% + 2rem);

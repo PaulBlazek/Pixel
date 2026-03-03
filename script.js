@@ -1,6 +1,7 @@
 const cashEl = document.getElementById("cash");
 const pixelBtn = document.getElementById("pixel");
 const speedWarningEl = document.getElementById("speed-warning");
+const bankWarningEl = document.getElementById("bank-warning");
 const coinFlipEl = document.getElementById("coin-flip");
 const coinTrackEl = document.getElementById("coin-track");
 const coinTextEl = document.getElementById("coin-text");
@@ -30,6 +31,7 @@ const SAVE_VERSION = 5;
 
 const SHOP_FEATURE_COST = 20;
 const BASE_SPEED_LIMIT = 5;
+const BASE_BANK_LIMIT = 5000;
 const SPEED_WARNING_STICK_MS = 3200;
 const CASH_MINE_PAYOUT = 50;
 const CASH_MINE_INTERVAL_MS = 60000;
@@ -54,6 +56,7 @@ const SHOP_ITEMS = [
       "more-mines-1",
       "deeper-mines-1",
       "faster-mines-1",
+      "bank-limit-1",
       "speed-limit-1"
     ]
   },
@@ -209,6 +212,29 @@ const SHOP_ITEMS = [
     requires: ["mine-insurance-2"]
   },
   {
+    id: "bank-limit-1",
+    name: "Bigger Bank",
+    description: "Raise bank limit from 5,000 to 7,500 cash.",
+    cost: 3000,
+    requires: ["shop-choices"],
+    unlocks: ["bank-limit-2"]
+  },
+  {
+    id: "bank-limit-2",
+    name: "Vault Upgrade",
+    description: "Raise bank limit from 7,500 to 10,000 cash.",
+    cost: 7500,
+    requires: ["bank-limit-1"],
+    unlocks: ["bank-limit-3"]
+  },
+  {
+    id: "bank-limit-3",
+    name: "Offshore Accounts",
+    description: "Raise bank limit from 10,000 to 15,000 cash.",
+    cost: 10000,
+    requires: ["bank-limit-2"]
+  },
+  {
     id: "click-upgrade",
     name: "Click Upgrade",
     description: "Each click grants +1 extra cash.",
@@ -318,6 +344,32 @@ function getClickValue(profile) {
     return 2;
   }
   return 1;
+}
+
+function getBankLimit(profile) {
+  if (hasItem(profile, "bank-limit-3")) {
+    return 15000;
+  }
+  if (hasItem(profile, "bank-limit-2")) {
+    return 10000;
+  }
+  if (hasItem(profile, "bank-limit-1")) {
+    return 7500;
+  }
+  return BASE_BANK_LIMIT;
+}
+
+function addCash(profile, amount) {
+  if (amount <= 0) {
+    return 0;
+  }
+  const bankLimit = getBankLimit(profile);
+  const availableSpace = Math.max(0, bankLimit - profile.cash);
+  const granted = Math.min(availableSpace, amount);
+  if (granted > 0) {
+    profile.cash += granted;
+  }
+  return granted;
 }
 
 function getAutoClicksPerSecond(profile) {
@@ -584,8 +636,7 @@ function triggerPixelAutoClickAnimation() {
 function processClick(profile, profileId, now, options = {}) {
   const enforceSpeedLimit = options.enforceSpeedLimit !== false;
   if (!enforceSpeedLimit) {
-    profile.cash += getClickValue(profile);
-    return true;
+    return addCash(profile, getClickValue(profile)) > 0;
   }
 
   const speedLimit = getCurrentSpeedLimit(profile);
@@ -595,9 +646,11 @@ function processClick(profile, profileId, now, options = {}) {
   let changedSaveData = false;
 
   if (!Number.isFinite(speedLimit) || grantedClickWindow.length < speedLimit) {
-    profile.cash += getClickValue(profile);
+    const gained = addCash(profile, getClickValue(profile));
     grantedClickWindow.push(now);
-    changedSaveData = true;
+    if (gained > 0) {
+      changedSaveData = true;
+    }
   } else {
     if (!profile.speedLimitDiscovered) {
       profile.speedLimitDiscovered = true;
@@ -629,6 +682,20 @@ function renderSpeedWarning(profile) {
     scheduleSpeedWarningRefresh();
   } else {
     speedWarningEl.classList.remove("is-visible");
+  }
+}
+
+function renderBankWarning(profile) {
+  if (!bankWarningEl) {
+    return;
+  }
+
+  const bankLimit = getBankLimit(profile);
+  if (profile.cash >= bankLimit) {
+    bankWarningEl.textContent = `Bank full at ${bankLimit.toLocaleString()} cash. Spend to keep earning.`;
+    bankWarningEl.classList.add("is-visible");
+  } else {
+    bankWarningEl.classList.remove("is-visible");
   }
 }
 
@@ -704,8 +771,9 @@ function render() {
     return;
   }
 
-  cashEl.textContent = profile.cash.toLocaleString();
-  shopCashEl.textContent = profile.cash.toLocaleString();
+  const bankLimit = getBankLimit(profile);
+  cashEl.textContent = `${profile.cash.toLocaleString()} / ${bankLimit.toLocaleString()}`;
+  shopCashEl.textContent = `${profile.cash.toLocaleString()} / ${bankLimit.toLocaleString()}`;
   if (!profile.shopFeatureUnlocked) {
     shopToggleBtn.classList.add("is-locked");
     shopToggleBtn.textContent = `\uD83D\uDD12 Unlock Shop (${SHOP_FEATURE_COST} cash)`;
@@ -720,6 +788,7 @@ function render() {
   renderShopItems(profile);
   renderProfileControls(profile);
   renderSpeedWarning(profile);
+  renderBankWarning(profile);
 }
 
 function buildSaveState() {
@@ -811,7 +880,7 @@ function sanitizeProfile(rawProfile, fallbackName) {
     ? rawProfile.name.trim().slice(0, 24)
     : fallbackName;
   const safeCash = typeof rawProfile?.cash === "number" && rawProfile.cash >= 0 ? rawProfile.cash : 0;
-  return {
+  const profile = {
     name: safeName,
     cash: safeCash,
     shopFeatureUnlocked: Boolean(rawProfile?.shopFeatureUnlocked),
@@ -819,6 +888,8 @@ function sanitizeProfile(rawProfile, fallbackName) {
     speedLimitDiscovered: Boolean(rawProfile?.speedLimitDiscovered),
     pixelColor: sanitizeHexColor(rawProfile?.pixelColor, "#00ffc3")
   };
+  profile.cash = Math.min(profile.cash, getBankLimit(profile));
+  return profile;
 }
 
 function loadFromV3(parsedState) {
@@ -872,6 +943,7 @@ function loadFromLegacy(parsedState) {
   }
   profile.purchasedItems = sanitizePurchasedItems(parsedState?.purchasedItems);
   profile.speedLimitDiscovered = Boolean(parsedState?.speedLimitDiscovered);
+  profile.cash = Math.min(profile.cash, getBankLimit(profile));
 
   state.profiles = { "profile-1": profile };
   state.profileOrder = ["profile-1"];
@@ -962,14 +1034,14 @@ function runCashMineTick(profileId, profile, now) {
   const heads = outcomes.filter(Boolean).length;
   const tails = mineCount - heads;
   const totalPayout = (heads * payoutPerHeads) + (tails * payoutPerTails);
+  const grantedPayout = addCash(profile, totalPayout);
 
-  if (totalPayout > 0) {
-    profile.cash += totalPayout;
+  if (grantedPayout > 0) {
     changedSaveData = true;
   }
 
   if (profileId === state.activeProfileId) {
-    playCoinFlipAnimation(outcomes, payoutPerHeads, totalPayout);
+    playCoinFlipAnimation(outcomes, payoutPerHeads, grantedPayout);
     render();
   }
 
